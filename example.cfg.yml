@@ -14,7 +14,7 @@ dns:
 etcd:
   server:
     host: '127.0.0.1'
-    port: 4002
+    port: 4001
   sets:
     skydns: |
       <% if container['Config']['Env'].has_key? 'SERVICES' %>

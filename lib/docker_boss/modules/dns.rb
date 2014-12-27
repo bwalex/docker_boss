@@ -5,9 +5,11 @@ require 'docker_boss/module'
 require 'thread'
 
 class DockerBoss::Module::DNS < DockerBoss::Module
+  attr_reader :records
+
   def initialize(config)
+    @records = {}
     @config = config
-    @server = Server.new(:ttl => @config['ttl'], :upstream_dns => @config['upstream'])
     DockerBoss.logger.debug "dns: Set up"
   end
 
@@ -21,7 +23,7 @@ class DockerBoss::Module::DNS < DockerBoss::Module
     DockerBoss.logger.debug "dns: Starting DNS server"
 
     Thread.new do
-      @server.run_server(:listen => listen)
+      RubyDNS::run_server(:listen => listen, :ttl => @config['ttl'], :upstream_dns => @config['upstream'], :supervisor_class => Server, :manager => self)
     end
   end
 
@@ -30,20 +32,24 @@ class DockerBoss::Module::DNS < DockerBoss::Module
     containers.each do |c|
       names = DockerBoss::Helpers.render_erb(@config['spec'], :container => c)
       names.lines.each do |n|
-        records[n] = c['NetworkSettings']['IPAddress']
+        records[n.lstrip.chomp] = c['NetworkSettings']['IPAddress']
       end
     end
 
-    @server.records = records
+    @records = records
   end
 
   class Server < RubyDNS::Server
     attr_writer :records
     IN = Resolv::DNS::Resource::IN
 
+    def records
+      @manager.records
+    end
+
     def initialize(options = {})
       super(options)
-      @records = {}
+      @manager = options[:manager]
 
       @ttl = options[:ttl]
       servers = options[:upstream_dns].map { |ip| [:udp, ip, 53] }
@@ -52,10 +58,10 @@ class DockerBoss::Module::DNS < DockerBoss::Module
     end
 
     def process(name, resource_class, transaction)
-      if @records.has_key? name
+      if records.has_key? name
         # XXX: revisit whenever docker supports IPv6, for AAAA records...
         if [IN::A].include? resource_class
-          transaction.respond!(@records[name], :ttl => @ttl)
+          transaction.respond!(records[name], :ttl => @ttl)
         else
           transaction.fail!(:NXDomain)
         end

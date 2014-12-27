@@ -13,7 +13,7 @@ class DockerBoss::Module::Templates < DockerBoss::Module
     @instances = []
 
     config.each do |name, inst_cfg|
-      @instances << Instance.new(name, config)
+      @instances << Instance.new(name, inst_cfg)
     end
   end
 
