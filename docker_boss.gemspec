@@ -1,11 +1,11 @@
 # coding: utf-8
 lib = File.expand_path('../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require 'docker_tmpl/version'
+require 'docker_boss/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "docker_tmpl"
-  spec.version       = DockerTmpl::VERSION
+  spec.name          = "docker_boss"
+  spec.version       = DockerBoss::VERSION
   spec.authors       = ["Alex Hornung"]
   spec.email         = ["alex@alexhornung.com"]
   spec.description   = %q{Templating using docker container information}
@@ -19,6 +19,10 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_dependency "docker-api", "~> 1.17.0"
+  spec.add_dependency "thor", "~> 0.19.1"
+  spec.add_dependency "daemons", "~> 1.1.9"
+  spec.add_dependency "rubydns", "~> 0.9.2"
+  spec.add_dependency "etcd", "~> 0.2.4"
 
   spec.add_development_dependency "bundler", "~> 1.3"
   spec.add_development_dependency "rake", "~> 10.4.2"

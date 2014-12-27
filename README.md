@@ -1,4 +1,4 @@
-# DockerTmpl
+# DockerBoss
 
 TODO: Write a gem description
 
@@ -6,7 +6,7 @@ TODO: Write a gem description
 
 Add this line to your application's Gemfile:
 
-    gem 'docker_tmpl'
+    gem 'docker_boss'
 
 And then execute:
 
@@ -14,7 +14,7 @@ And then execute:
 
 Or install it yourself as:
 
-    $ gem install docker_tmpl
+    $ gem install docker_boss
 
 ## Usage
 

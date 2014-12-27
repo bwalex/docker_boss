@@ -1,0 +1,72 @@
+dns:
+  ttl: 5
+  listen:
+    - host: 0.0.0.0
+      port: 5300
+
+  upstream:
+    - 8.8.8.8
+    - 8.8.4.4
+
+  spec: |
+    <%= container['Config']['Env'].fetch('SERVICE_NAME', container['Name'][1..-1]) %>
+
+etcd:
+  server:
+    host: '127.0.0.1'
+    port: 4002
+  sets:
+    skydns: |
+      <% if container['Config']['Env'].has_key? 'SERVICES' %>
+        <% container['Config']['Env']['SERVICES'].split(',').each do |s| %>
+          ensure <%= "/skydns/#{s.split(':')[0].split('.').reverse.join('/')}" %> { 'host': '<%= container['NetworkSettings']['IPAddress'] %>', 'port': '<%= s.split(':')[1] %>' }
+        <% end %>
+      <% elsif container['Config']['Env'].has_key? 'SERVICE_NAME' %>
+        ensure <%= "/skydns/#{container['Config']['Env']['SERVICE_NAME'].split('.').reverse.join('/')}" %> { 'host': '<%= container['NetworkSettings']['IPAddress'] %>' }
+      <% else %>
+        ensure <%= "/skydns/#{container['Config']['Hostname'].split('.').reverse.join('/')}" %> { 'host': '<%= container['NetworkSettings']['IPAddress'] %>' }
+      <% end %>
+
+    vhosts: |
+      <% container['Config']['Env'].fetch('VHOSTS', '').split(',').each do |vh| %>
+        ensure <%= "/vhosts/#{vh.split(':')[0]}/#{container['Id']}" %> { 'host': '<%= container['NetworkSettings']['IPAddress'] %>', 'port': '<%= vh.split(':').fetch(1, '80') %>' }
+      <% end %>
+
+templates:
+  auto_haproxy:
+    linked_container:
+      name:   "mydb"
+      action: "restart"
+      # Available actions:
+      #   shell:<cmd>
+      #     Examples:
+      #       action: "shell:cat /proc/cpuinfo > /tmp/cpuinfo"
+      #       action: "exec:touch /tmp/foobarISIMO"
+      #       action: "kill:SIGHUP"
+      #   shell_bg:<cmd>
+      #   exec:<cmd>
+      #   exec_bg:<cmd>
+      #   restart
+      #     It restarts ...
+      #   start
+      #     It starts ...
+      #   stop
+      #     It stops...
+      #   kill
+      #   kill:<SIG>
+      #
+      #   pause
+      #   unpause
+
+    files:
+      - file:     "<%= container['Volumes']['/var/lib/mysql'] %>/foo.cfg"
+        template: "<%= container['Volumes']['/var/lib/mysql'] %>/foo.cfg.erb"
+
+    action: "echo 'hi' > /tmp/foo.test"
+
+# XXX: Things to explore (Not much related to this)
+#  - using a ruby dns server instance for service discovery-ish with this
+#  - etcd/confd for configuration file updates
+#  - this writing into etcd/confd based on templates, available nodes, etc
+#
+#  -> option 1 and option 3!
