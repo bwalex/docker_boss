@@ -10,6 +10,9 @@ DockerBoss has been built from the start to be completely pluggable. By default,
 
  - dns: The dns module has a very simple built-in DNS server. The DNS server's records get updated based on the container's addresses, names, environment variables, etc. The DNS server will pass through requests for zones that it is not the authoritative server for.
 
+The pluggable design of DockerBoss, alongside the flexibility offered by the default modules, makes it possible to adapt DockerBoss to a large number of different use cases and scenarios, without being tied down to one particular convention as others do.
+
+
 ## Installation
 
 Add this line to your application's Gemfile:
