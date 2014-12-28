@@ -47,29 +47,13 @@ templates:
     linked_container:
       name:   "mydb"
       action: "restart"
-      # Available actions:
-      #   shell:<cmd>
-      #     Examples:
-      #       action: "shell:cat /proc/cpuinfo > /tmp/cpuinfo"
-      #       action: "exec:touch /tmp/foobarISIMO"
-      #       action: "kill:SIGHUP"
-      #   shell_bg:<cmd>
-      #   exec:<cmd>
-      #   exec_bg:<cmd>
-      #   restart
-      #     It restarts ...
-      #   start
-      #     It starts ...
-      #   stop
-      #     It stops...
-      #   kill
-      #   kill:<SIG>
-      #
-      #   pause
-      #   unpause
+      # Other examples:
+      # action: "shell:cat /proc/cpuinfo > /tmp/cpuinfo"
+      # action: "exec:touch /tmp/foobar"
+      # action: "kill:SIGHUP"
 
     files:
       - file:     "<%= container['Volumes']['/var/lib/mysql'] %>/foo.cfg"
         template: "<%= container['Volumes']['/var/lib/mysql'] %>/foo.cfg.erb"
 
-    action: "echo 'hi' > /tmp/foo.test"
+    action: "echo 'This happens on the host' > /tmp/foo.test"
