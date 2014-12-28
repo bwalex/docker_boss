@@ -104,7 +104,7 @@ class DockerBoss::Module::Templates < DockerBoss::Module
           not has_link? or
           linked_container.id != trigger_id
         # Only do something if the linked container is not also the triggering container
-        changed = @config['files'].inject (false) { |changed,f| changed || do_file(f, containers) }
+        changed = @config['files'].inject (false) { |changed,f| do_file(f, containers) || changed }
         DockerBoss.logger.info "templates: Instance `#{@name}`: triggered; changed=#{changed}"
         do_actions if changed
       else

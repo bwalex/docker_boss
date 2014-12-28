@@ -13,6 +13,24 @@ class DockerBoss::Module::Etcd < DockerBoss::Module
     DockerBoss.logger.debug "etcd: Set up to connect to #{@config['server']['host']}, port #{@config['server']['port']}"
     @client = ::Etcd.client(host: @config['server']['host'], port: @config['server']['port'])
     @previous_keys = {}
+    setup
+  end
+
+  def setup
+    @config.fetch('setup', '').lines.each do |line|
+      (kw, k, v) = line.lstrip.chomp.split(" ", 3)
+      case kw
+      when 'absent'
+        DockerBoss.logger.debug "etcd: (setup) Remove key `#{k}`"
+        @client.delete(k)
+      when 'absent_recursive'
+        DockerBoss.logger.debug "etcd: (setup) Remove key `#{k}` recursively"
+        @client.delete(k, recursive: true)
+      when 'ensure'
+        DockerBoss.logger.debug "etcd: (setup) Set key `#{k}` => `#{v}`"
+        @client.set(k, value: v)
+      end
+    end
   end
 
   def trigger(containers, trigger_id)
@@ -42,6 +60,7 @@ class DockerBoss::Module::Etcd < DockerBoss::Module
       tmpl = ERB.new(template)
       containers.each do |container|
         ns = OpenStruct.new({ container: container })
+        ns.extend(DockerBoss::Helpers::TemplateHelpers)
         entries = tmpl.result(ns.instance_eval { binding })
         entries.lines.each do |line|
           (keyword, key, value) = line.lstrip.chomp.split(" ", 3)

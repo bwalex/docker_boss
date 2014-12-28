@@ -1,6 +1,7 @@
 require 'yaml'
 require 'erb'
 require 'ostruct'
+require 'json'
 
 module DockerBoss::Helpers
   def self.render_erb(template_str, data)
@@ -34,5 +35,11 @@ module DockerBoss::Helpers
     end
 
     changes
+  end
+
+  module TemplateHelpers
+    def as_json(hash)
+      hash.to_json
+    end
   end
 end

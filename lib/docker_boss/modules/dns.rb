@@ -23,7 +23,7 @@ class DockerBoss::Module::DNS < DockerBoss::Module
     DockerBoss.logger.debug "dns: Starting DNS server"
 
     Thread.new do
-      RubyDNS::run_server(:listen => listen, :ttl => @config['ttl'], :upstream_dns => @config['upstream'], :supervisor_class => Server, :manager => self)
+      RubyDNS::run_server(:listen => listen, :ttl => @config['ttl'], :upstream_dns => @config['upstream'], :zones => @config['zones'], :supervisor_class => Server, :manager => self)
     end
   end
 
@@ -51,13 +51,15 @@ class DockerBoss::Module::DNS < DockerBoss::Module
       super(options)
       @manager = options[:manager]
 
-      @ttl = options[:ttl]
+      @ttl = options[:ttl].to_i
+      @zones = options[:zones]
       servers = options[:upstream_dns].map { |ip| [:udp, ip, 53] }
       servers.concat(options[:upstream_dns].map { |ip| [:tcp, ip, 53] })
       @resolver = RubyDNS::Resolver.new(servers)
     end
 
     def process(name, resource_class, transaction)
+      zone = @zones.find { |z| name =~ /#{z}$/ }
       if records.has_key? name
         # XXX: revisit whenever docker supports IPv6, for AAAA records...
         if [IN::A].include? resource_class
@@ -65,6 +67,10 @@ class DockerBoss::Module::DNS < DockerBoss::Module
         else
           transaction.fail!(:NXDomain)
         end
+      elsif zone
+        soa = Resolv::DNS::Resource::IN::SOA.new(Resolv::DNS::Name.create("#{zone}"), Resolv::DNS::Name.create("dockerboss."), 1, @ttl, @ttl, @ttl, @ttl)
+        transaction.add([soa], :name => "#{zone}.", :ttl => @ttl, :section => :authority)
+        transaction.fail!(:NXDomain)
       else
         transaction.passthrough!(@resolver)
       end
