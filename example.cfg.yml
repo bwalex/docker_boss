@@ -15,8 +15,6 @@ dns:
   spec: |
     <%= container['Config']['Env'].fetch('SERVICE_NAME', container['Name'][1..-1]) %>.docker
 
-#consul:
-
 etcd:
   server:
     host: '127.0.0.1'
