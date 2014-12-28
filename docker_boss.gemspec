@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.version       = DockerBoss::VERSION
   spec.authors       = ["Alex Hornung"]
   spec.email         = ["alex@alexhornung.com"]
-  spec.description   = %q{Templating using docker container information}
-  spec.summary       = %q{Templating using docker container information}
+  spec.description   = %q{DockerBoss monitors docker containers for changes and triggers actions based on these changes, such as updating keys in etcd, updating DNS records, performing actions on other containers, etc.}
+  spec.summary       = %q{DockerBoss monitors docker containers for changes and triggers actions based on these changes.}
   spec.homepage      = "https://github.com/bwalex/docker_boss"
   spec.license       = "MIT"
 
