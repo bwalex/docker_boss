@@ -245,9 +245,127 @@ A very simple example template file could look as follows:
 
 ### etcd
 
+The etcd module adds/updates/removes keys in etcd based on changes to the containers. This can be used to provide dynamic settings based on the containers to other tools interfacing with etcd, such as SkyDNS and confd.
+
+The `server` setting defines the host and port of the etcd server. SSL and basic HTTP auth are not yet supported.
+
+The `setup` setting is a template, each line of which can manipulate keys in etcd. These key manipulations are run once when the module/DockerBoss starts, and can be used to ensure a clean slate, free of any old keys from a previous run. Each line must follow one of the following formats:
+
+ - `ensure <key> <value>` - sets a given key in etcd to the given value.
+ - `absent <key>` - removes a given key in etcd.
+ - `absent_recursive <key>` removes a key and all its children.
+
+The `sets` setting supports any number of children, each of which is an ERB template that will be rendered for each container. The output of the template rendering must be lines of the following format:
+
+ - `ensure <key> <value>` - ensure a key exists in etcd with the given value.
+
+The etcd will keep track of keys set during previous state updates, and if a key is no longer present, it will be removed from etcd.
+
+Example configuration:
+
+```yaml
+etcd:
+  server:
+    host: '127.0.0.1'
+    port: 4001
+
+  setup: |
+    absent_recursive /skydns/docker
+    absent_recursive /vhosts
+
+  sets:
+    skydns: |
+      <% if container['Config']['Env'].has_key? 'SERVICES' %>
+        <% container['Config']['Env']['SERVICES'].split(',').each do |s| %>
+          ensure <%= "/skydns/#{s.split(':')[0].split('.').reverse.join('/')}" %> <%= as_json(host: container['NetworkSettings']['IPAddress'], port: s.split(':')[1]) %>
+        <% end %>
+      <% elsif container['Config']['Env'].has_key? 'SERVICE_NAME' %>
+        ensure <%= "/skydns/#{container['Config']['Env']['SERVICE_NAME'].split('.').reverse.join('/')}" %> <%= as_json(host: container['NetworkSettings']['IPAddress']) %>
+      <% else %>
+        ensure <%= "/skydns/#{(container['Config']['Hostname'] + ".docker").split('.').reverse.join('/')}" %> <%= as_json(host: container['NetworkSettings']['IPAddress']) %>
+        ensure <%= "/skydns/#{(container['Name'][1..-1] + ".docker").split('.').reverse.join('/')}" %> <%= as_json(host: container['NetworkSettings']['IPAddress']) %>
+      <% end %>
+
+    vhosts: |
+      <% container['Config']['Env'].fetch('VHOSTS', '').split(',').each do |vh| %>
+        ensure <%= "/vhosts/#{vh.split(':')[0]}/#{container['Id']}" %> <%= as_json(host: container['NetworkSettings']['IPAddress'], port: vh.split(':').fetch(1, '80')) %>
+      <% end %>
+```
+
+
 ### dns
 
+The DNS module starts a built-in DNS server based on `rubydns`. The DNS server can be configured to support a number of upstream DNS servers, to which queries fall through if no known record is available and it doesn't match any of the internal DNS zones. As Docker can currently only handle IPv4, no `AAAA` records are ever served for containers.
+
+The `ttl` setting determines the `ttl` for each response, both positive and NXDOMAIN.
+
+The `listen` setting is an array of addresses/ports on which the DNS server should listen.
+
+The `upstream` setting is an array of upstream DNS servers to which requests should be forwarded to if no record is available locally and the name is not within one of the local zones.
+
+The `zones` setting is an array of zones for which the DNS server is authoritative. The DNS server will not forward requests in these zones to upstream DNS servers, not even if no local record is found.
+
+The `spec` setting is an ERB template which should render out all hostnames for a given container, each on a separate line. A container can have any number of host records, even none at all (by simply not rendering out any hostname).
+
+Example configuration:
+
+```yaml
+dns:
+  ttl: 5
+  listen:
+    - host: 0.0.0.0
+      port: 5300
+
+  upstream:
+    - 8.8.8.8
+    - 8.8.4.4
+
+  zones:
+    - .local
+    - .docker
+
+  spec: |
+    <%= container['Config']['Env'].fetch('SERVICE_NAME', container['Name'][1..-1]) %>.docker
+    <%= container['Config']['Hostname'] %>.docker
+```
+
 ### Writing your own
+
+Writing your own module is really quite simple. You only have to provide a `trigger` method that will be called on each state change, and is passed an array of all the currently running containers, as well as the ID of the container that triggered the state change.
+
+Additionally, you can provide a `run` method which can spawn off a long-running thread. The `run` method must return a `Thread` instance.
+
+Here's a basic skeleton:
+```ruby
+require 'docker_boss'
+require 'docker_boss/module'
+
+class DockerBoss::Module::Foo < DockerBoss::Module
+  def initialize(config)
+    @config = config
+    DockerBoss.logger.debug "foo: Set up with config: #{config}"
+  end
+
+  # This method is optional; you should omit it unless you spawn off a
+  # separate, long-running, thread.
+  def run
+    Thread.new do
+      loop do
+        sleep 10
+      end
+    end
+  end
+
+  def trigger(containers, trigger_id)
+    DockerBoss.logger.debug "foo: State change triggered by container_id=#{trigger_id}"
+    containers.each do |c|
+      DockerBoss.logger.debug "foo: container: #{c['Id]}"
+    end
+  end
+end
+```
+
+Any class extending `DockerBoss::Module` is automatically registered as a module. The name of the class defines the name of the configuration key in the config yaml. For the example above, the name of the key would be `foo`. Any key under `foo` in the config yaml would be passed as `config` to the class constructor.
 
 
 ## Contributing
