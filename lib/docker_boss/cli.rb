@@ -11,7 +11,8 @@ require 'yaml'
 class DockerBoss::CLI < Thor
   desc "once", "Run once and exit"
   method_option :config, :aliases => "-c", :type => :string, :required => true
-  method_option :log,    :aliases => "-l", :type => :string, :default => "-"
+  method_option :log,    :aliases => "-l", :type => :string, :default => "-", :desc => "Specify a file to log to, or '-' to log to the standard output, or 'syslog' to log to syslog"
+  method_option :debug,  :aliases => "-d", :type => :boolean, :default => false, :desc => "Specify this option to run with debug logging enabled"
   def once
     setup_logging
     read_config
@@ -25,8 +26,9 @@ class DockerBoss::CLI < Thor
 
   desc "watch", "Run once, then watch for events"
   method_option :config,        :aliases => "-c", :type => :string,  :required => true
-  method_option :log,           :aliases => "-l", :type => :string,  :default => "-"
-  method_option :daemonize,     :aliases => "-D", :type => :boolean, :default => false
+  method_option :log,           :aliases => "-l", :type => :string,  :default => "-", :desc => "Specify a file to log to, or '-' to log to the standard output, or 'syslog' to log to syslog"
+  method_option :debug,         :aliases => "-d", :type => :boolean, :default => false, :desc => "Specify this option to run with debug logging enabled"
+  method_option :daemonize,     :aliases => "-D", :type => :boolean, :default => false, :desc => "Specify this option to daemonize the process instead of running in the foreground"
   method_option :incr_refresh,                    :type => :boolean, :default => false
   def watch
     setup_logging
@@ -67,6 +69,7 @@ class DockerBoss::CLI < Thor
         @logger = Logger.new(options[:log])
       end
 
+      @logger.level = options[:debug] ? Logger::DEBUG : Logger::INFO
       DockerBoss.logger=(@logger)
     end
 
