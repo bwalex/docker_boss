@@ -39,12 +39,12 @@ class DockerBoss::Engine
   end
 
   def xform_container(container)
-    env = {}
+    new_env = {}
     container['Config']['Env'].each do |env|
       (k,v) = env.split('=', 2)
-      env[k] = v || true
+      new_env[k] = v || true
     end
-    container['Config']['Env'] = env
+    container['Config']['Env'] = new_env
     container
   end
 
