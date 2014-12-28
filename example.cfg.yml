@@ -63,10 +63,3 @@ templates:
         template: "<%= container['Volumes']['/var/lib/mysql'] %>/foo.cfg.erb"
 
     action: "echo 'hi' > /tmp/foo.test"
-
-# XXX: Things to explore (Not much related to this)
-#  - using a ruby dns server instance for service discovery-ish with this
-#  - etcd/confd for configuration file updates
-#  - this writing into etcd/confd based on templates, available nodes, etc
-#
-#  -> option 1 and option 3!
