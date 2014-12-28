@@ -14,6 +14,7 @@ dns:
 
   spec: |
     <%= container['Config']['Env'].fetch('SERVICE_NAME', container['Name'][1..-1]) %>.docker
+    <%= container['Config']['Hostname'] %>.docker
 
 etcd:
   server:
@@ -33,6 +34,7 @@ etcd:
         ensure <%= "/skydns/#{container['Config']['Env']['SERVICE_NAME'].split('.').reverse.join('/')}" %> <%= as_json(host: container['NetworkSettings']['IPAddress']) %>
       <% else %>
         ensure <%= "/skydns/#{(container['Config']['Hostname'] + ".docker").split('.').reverse.join('/')}" %> <%= as_json(host: container['NetworkSettings']['IPAddress']) %>
+        ensure <%= "/skydns/#{(container['Name'][1..-1] + ".docker").split('.').reverse.join('/')}" %> <%= as_json(host: container['NetworkSettings']['IPAddress']) %>
       <% end %>
 
     vhosts: |
