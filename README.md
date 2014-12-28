@@ -362,7 +362,7 @@ class DockerBoss::Module::Foo < DockerBoss::Module
   def trigger(containers, trigger_id)
     DockerBoss.logger.debug "foo: State change triggered by container_id=#{trigger_id}"
     containers.each do |c|
-      DockerBoss.logger.debug "foo: container: #{c['Id]}"
+      DockerBoss.logger.debug "foo: container: #{c['Id']}"
     end
   end
 end
