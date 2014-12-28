@@ -60,6 +60,130 @@ If, for example, a key called `etcd` exists, then the DockerBoss `etcd` module w
 
 For more details about the configuration for each module, have a look at the detailed description of that module.
 
+### Container description
+
+Wherever templates are used in configuration settings or external template files, they are generally passed either a single container or an array of containers. Each container is a Ruby Hash, as follows:
+
+```json
+{
+   "AppArmorProfile":"",
+   "Args":[
+      "mysqld"
+   ],
+   "Config":{
+      "AttachStderr":true,
+      "AttachStdin":false,
+      "AttachStdout":true,
+      "Cmd":[
+         "mysqld"
+      ],
+      "CpuShares":0,
+      "Cpuset":"",
+      "Domainname":"",
+      "Entrypoint":[
+         "/docker-entrypoint.sh"
+      ],
+      "Env":{
+         "MYSQL_ROOT_PASSWORD":"assbYrwVnWxP",
+         "PATH":"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+         "MARIADB_MAJOR":"10.0",
+         "MARIADB_VERSION":"10.0.15+maria-1~wheezy"
+      },
+      "ExposedPorts":{
+         "3306/tcp":{
+
+         }
+      },
+      "Hostname":"6b2bbdac4b6e",
+      "Image":"mariadb",
+      "MacAddress":"",
+      "Memory":0,
+      "MemorySwap":0,
+      "NetworkDisabled":false,
+      "OnBuild":null,
+      "OpenStdin":false,
+      "PortSpecs":null,
+      "StdinOnce":false,
+      "Tty":false,
+      "User":"",
+      "Volumes":{
+         "/var/lib/mysql":{
+
+         }
+      },
+      "WorkingDir":""
+   },
+   "Created":"2014-12-24T15:54:44.830878163Z",
+   "Driver":"devicemapper",
+   "ExecDriver":"native-0.2",
+   "HostConfig":{
+      "Binds":null,
+      "CapAdd":null,
+      "CapDrop":null,
+      "ContainerIDFile":"",
+      "Devices":[
+
+      ],
+      "Dns":null,
+      "DnsSearch":null,
+      "ExtraHosts":null,
+      "IpcMode":"",
+      "Links":null,
+      "LxcConf":[
+
+      ],
+      "NetworkMode":"bridge",
+      "PortBindings":{
+
+      },
+      "Privileged":false,
+      "PublishAllPorts":false,
+      "RestartPolicy":{
+         "MaximumRetryCount":0,
+         "Name":""
+      },
+      "SecurityOpt":null,
+      "VolumesFrom":null
+   },
+   "HostnamePath":"/var/lib/docker/containers/6b2bbdac4b6e01caccf84346aff37f31740760a95d131b519de6e6e0ca6ba2d9/hostname",
+   "HostsPath":"/var/lib/docker/containers/6b2bbdac4b6e01caccf84346aff37f31740760a95d131b519de6e6e0ca6ba2d9/hosts",
+   "Id":"6b2bbdac4b6e01caccf84346aff37f31740760a95d131b519de6e6e0ca6ba2d9",
+   "Image":"dc7e7b74d729c8b7ffab9ac5bc4b9a1463739e085b461b29928bf2fee1ff8303",
+   "MountLabel":"",
+   "Name":"/differentdb",
+   "NetworkSettings":{
+      "Bridge":"docker0",
+      "Gateway":"172.17.42.1",
+      "IPAddress":"172.17.0.19",
+      "IPPrefixLen":16,
+      "MacAddress":"02:42:ac:11:00:13",
+      "PortMapping":null,
+      "Ports":{
+         "3306/tcp":null
+      }
+   },
+   "Path":"/docker-entrypoint.sh",
+   "ProcessLabel":"",
+   "ResolvConfPath":"/var/lib/docker/containers/6b2bbdac4b6e01caccf84346aff37f31740760a95d131b519de6e6e0ca6ba2d9/resolv.conf",
+   "State":{
+      "Error":"",
+      "ExitCode":0,
+      "FinishedAt":"0001-01-01T00:00:00Z",
+      "OOMKilled":false,
+      "Paused":false,
+      "Pid":13435,
+      "Restarting":false,
+      "Running":true,
+      "StartedAt":"2014-12-24T15:54:45.133773245Z"
+   },
+   "Volumes":{
+      "/var/lib/mysql":"/var/lib/docker/vfs/dir/1e3963ffc558c14d4b29bea89d6eafca9945500f5c80ea94b94b6e8664d5a1dc"
+   },
+   "VolumesRW":{
+      "/var/lib/mysql":true
+   }
+}
+```
 
 ## Modules
 
@@ -87,6 +211,10 @@ The `linked_container` `action` setting allows performing one of the following a
 
 The `action` setting outside the `linked_container` setting allows running an arbitrary shell command on the host.
 
+The `files` section allows specifying an array of `file` - `template` pairs. The file and template names themselves can contain ERB templates. These ERB templates can access information about the linked container via the `container` variable.
+
+The templates themselves should also be ERB templates. They will be rendered with ERB, with a single variable in the namespace called `containers`, which is an array of all currently running containers.
+
 Example configuration:
 
 ```yaml
@@ -105,6 +233,14 @@ templates:
         template: "<%= container['Volumes']['/etc/haproxy/proxies'] %>/proxies.cfg.erb"
 
     action: "echo 'This happens on the host' > /tmp/foo.test"
+```
+
+A very simple example template file could look as follows:
+
+```
+<% containers.each do |c| %>
+<%= c['Id'] %> -> <%= c['Name'] %>
+<% end %>
 ```
 
 ### etcd
