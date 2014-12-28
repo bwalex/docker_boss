@@ -262,7 +262,7 @@ The `sets` setting supports any number of children, each of which is an ERB temp
 
  - `ensure <key> <value>` - ensure a key exists in etcd with the given value.
 
-The etcd will keep track of keys set during previous state updates, and if a key is no longer present, it will be removed from etcd.
+The etcd module will keep track of keys set during previous state updates, and if a key is no longer present, it will be removed from etcd.
 
 Example configuration:
 
