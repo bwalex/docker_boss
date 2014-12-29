@@ -7,6 +7,7 @@ module DockerBoss::Helpers
   def self.render_erb(template_str, data)
     tmpl = ERB.new(template_str)
     ns = OpenStruct.new(data)
+    ns.extend(TemplateHelpers)
     tmpl.result(ns.instance_eval { binding })
   end
 
@@ -40,6 +41,18 @@ module DockerBoss::Helpers
   module TemplateHelpers
     def as_json(hash)
       hash.to_json
+    end
+
+    def interface_ipv4(iface)
+      ipv4 = `ip addr show docker0 | grep -Po 'inet \\K[\\d.]+'`
+      raise ArgumentError, "Could not retrieve IPv4 address for interface `#{iface}`" unless $? == 0
+      ipv4.chomp
+    end
+
+    def interface_ipv6(iface)
+      ipv6 = `ip addr show docker0 | grep -Po 'inet6 \\K[\\da-f:]+'`
+      raise ArgumentError, "Could not retrieve IPv6 address for interface `#{iface}`" unless $? == 0
+      ipv6.chomp
     end
   end
 end

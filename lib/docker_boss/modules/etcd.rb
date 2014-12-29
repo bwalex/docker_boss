@@ -10,14 +10,16 @@ require 'etcd'
 class DockerBoss::Module::Etcd < DockerBoss::Module
   def initialize(config)
     @config = config
-    DockerBoss.logger.debug "etcd: Set up to connect to #{@config['server']['host']}, port #{@config['server']['port']}"
-    @client = ::Etcd.client(host: @config['server']['host'], port: @config['server']['port'])
+    @host = DockerBoss::Helpers.render_erb(@config['server']['host'], {})
+    DockerBoss.logger.debug "etcd: Set up to connect to #{@host}, port #{@config['server']['port']}"
+    @client = ::Etcd.client(host: @host, port: @config['server']['port'])
     @previous_keys = {}
     setup
   end
 
   def setup
-    @config.fetch('setup', '').lines.each do |line|
+    setup = DockerBoss::Helpers.render_erb(@config.fetch('setup', ''), {})
+    setup.lines.each do |line|
       (kw, k, v) = line.lstrip.chomp.split(" ", 3)
       case kw
       when 'absent'

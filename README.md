@@ -250,9 +250,9 @@ A very simple example template file could look as follows:
 
 The etcd module adds/updates/removes keys in etcd based on changes to the containers. This can be used to provide dynamic settings based on the containers to other tools interfacing with etcd, such as SkyDNS and confd.
 
-The `server` setting defines the host and port of the etcd server. SSL and basic HTTP auth are not yet supported.
+The `server` setting defines the host and port of the etcd server. SSL and basic HTTP auth are not yet supported. The `host` field is rendered as an ERB template, and has access to two helper functions, `interface_ipv4(some_intf)` and `interface_ipv6(some_intf)` which get the IPv4 or IPv6 address of a particular host interface.
 
-The `setup` setting is a template, each line of which can manipulate keys in etcd. These key manipulations are run once when the module/DockerBoss starts, and can be used to ensure a clean slate, free of any old keys from a previous run. Each line must follow one of the following formats:
+The `setup` setting is a template, each line of which can manipulate keys in etcd. These key manipulations are run once when the module/DockerBoss starts, and can be used to ensure a clean slate, free of any old keys from a previous run. The `setup` template can use the `interface_ipv4` and `interface_ipv6` helpers. Each line must follow one of the following formats:
 
  - `ensure <key> <value>` - sets a given key in etcd to the given value.
  - `absent <key>` - removes a given key in etcd.
@@ -269,12 +269,13 @@ Example configuration:
 ```yaml
 etcd:
   server:
-    host: '127.0.0.1'
+    host: <%= interface_ipv4('docker0') %>
     port: 4001
 
   setup: |
     absent_recursive /skydns/docker
     absent_recursive /vhosts
+    ensure /skydns/docker/dockerhost/etcd <%= as_json(host: interface_ipv4('docker0'), port: '4001') %>
 
   sets:
     skydns: |
@@ -302,11 +303,13 @@ The DNS module starts a built-in DNS server based on `rubydns`. The DNS server c
 
 The `ttl` setting determines the `ttl` for each response, both positive and NXDOMAIN.
 
-The `listen` setting is an array of addresses/ports on which the DNS server should listen.
+The `listen` setting is an array of addresses/ports on which the DNS server should listen. As with the `server.host` key for the etcd module, the `host` key is a template with access to the `interface_ipv4` and `interface_ipv6` helpers.
 
 The `upstream` setting is an array of upstream DNS servers to which requests should be forwarded to if no record is available locally and the name is not within one of the local zones.
 
 The `zones` setting is an array of zones for which the DNS server is authoritative. The DNS server will not forward requests in these zones to upstream DNS servers, not even if no local record is found.
+
+The `setup` setting is a template, each line of which adds a new DNS record at setup time, independently of any containers. These records are added when the module/DockerBoss starts. Each line must follow the format of `some_host_name some_ip_address`. The `setup` template can use the `interface_ipv4` and `interface_ipv6` helpers.
 
 The `spec` setting is an ERB template which should render out all hostnames for a given container, each on a separate line. A container can have any number of host records, even none at all (by simply not rendering out any hostname).
 
@@ -316,7 +319,9 @@ Example configuration:
 dns:
   ttl: 5
   listen:
-    - host: 0.0.0.0
+    - host: <%= interface_ipv4('docker0') %>
+      port: 5300
+    - host: 127.0.0.1
       port: 5300
 
   upstream:
@@ -326,6 +331,9 @@ dns:
   zones:
     - .local
     - .docker
+
+  setup: |
+    etcd.dockerhost.docker <%= interface_ipv4('docker0') %>
 
   spec: |
     <%= container['Config']['Env'].fetch('SERVICE_NAME', container['Name'][1..-1]) %>.docker

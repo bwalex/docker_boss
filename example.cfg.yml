@@ -1,7 +1,7 @@
 dns:
   ttl: 5
   listen:
-    - host: 0.0.0.0
+    - host: <%= interface_ipv4('docker0') %>
       port: 5300
 
   upstream:
@@ -12,17 +12,21 @@ dns:
     - .local
     - .docker
 
+  setup: |
+    etcd.dockerhost.docker <%= interface_ipv4('docker0') %>
+
   spec: |
     <%= container['Config']['Env'].fetch('SERVICE_NAME', container['Name'][1..-1]) %>.docker
     <%= container['Config']['Hostname'] %>.docker
 
 etcd:
   server:
-    host: '127.0.0.1'
+    host: <%= interface_ipv4('docker0') %>
     port: 4001
 
   setup: |
     absent_recursive /skydns/docker
+    ensure /skydns/docker/dockerhost/etcd <%= as_json(host: interface_ipv4('docker0'), port: '4001') %>
 
   sets:
     skydns: |

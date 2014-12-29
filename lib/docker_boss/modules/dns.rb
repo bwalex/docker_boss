@@ -9,18 +9,31 @@ class DockerBoss::Module::DNS < DockerBoss::Module
 
   def initialize(config)
     @records = {}
+    @setup_records = {}
     @config = config
     DockerBoss.logger.debug "dns: Set up"
+    setup
+  end
+
+  def setup
+    setup = DockerBoss::Helpers.render_erb(@config.fetch('setup', ''), {})
+    setup.lines.each do |line|
+      (name, ip) = line.lstrip.chomp.split(" ", 2)
+      @setup_records[name] = ip
+    end
   end
 
   def run
     listen = []
-    @config['listen'].each do |l|
-      listen << [:udp, l['host'], l['port'].to_i]
-      listen << [:tcp, l['host'], l['port'].to_i]
-    end
 
     DockerBoss.logger.debug "dns: Starting DNS server"
+
+    @config['listen'].each do |l|
+      host = DockerBoss::Helpers.render_erb(l['host'], {})
+      listen << [:udp, host, l['port'].to_i]
+      listen << [:tcp, host, l['port'].to_i]
+      DockerBoss.logger.debug "dns: Listening on #{host} (port: #{l['port']})"
+    end
 
     Thread.new do
       RubyDNS::run_server(:listen => listen, :ttl => @config['ttl'], :upstream_dns => @config['upstream'], :zones => @config['zones'], :supervisor_class => Server, :manager => self)
@@ -28,7 +41,7 @@ class DockerBoss::Module::DNS < DockerBoss::Module
   end
 
   def trigger(containers, trigger_id)
-    records = {}
+    records = @setup_records.clone
     containers.each do |c|
       names = DockerBoss::Helpers.render_erb(@config['spec'], :container => c)
       names.lines.each do |n|
