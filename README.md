@@ -275,13 +275,13 @@ etcd:
   setup: |
     absent_recursive /skydns/docker
     absent_recursive /vhosts
-    ensure /skydns/docker/dockerhost/etcd <%= as_json(host: interface_ipv4('docker0'), port: '4001') %>
+    ensure /skydns/docker/dockerhost/etcd <%= as_json(host: interface_ipv4('docker0'), port: 4001) %>
 
   sets:
     skydns: |
       <% if container['Config']['Env'].has_key? 'SERVICES' %>
         <% container['Config']['Env']['SERVICES'].split(',').each do |s| %>
-          ensure <%= "/skydns/#{s.split(':')[0].split('.').reverse.join('/')}" %> <%= as_json(host: container['NetworkSettings']['IPAddress'], port: s.split(':')[1]) %>
+          ensure <%= "/skydns/#{s.split(':')[0].split('.').reverse.join('/')}" %> <%= as_json(host: container['NetworkSettings']['IPAddress'], port: s.split(':')[1].to_i) %>
         <% end %>
       <% elsif container['Config']['Env'].has_key? 'SERVICE_NAME' %>
         ensure <%= "/skydns/#{container['Config']['Env']['SERVICE_NAME'].split('.').reverse.join('/')}" %> <%= as_json(host: container['NetworkSettings']['IPAddress']) %>
