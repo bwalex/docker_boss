@@ -23,11 +23,17 @@ class DockerBoss::Module::Etcd < DockerBoss::Module
       (kw, k, v) = line.lstrip.chomp.split(" ", 3)
       case kw
       when 'absent'
-        DockerBoss.logger.debug "etcd: (setup) Remove key `#{k}`"
-        @client.delete(k)
+        begin
+          DockerBoss.logger.debug "etcd: (setup) Remove key `#{k}`"
+          @client.delete(k)
+        rescue ::Etcd::KeyNotFound
+        end
       when 'absent_recursive'
-        DockerBoss.logger.debug "etcd: (setup) Remove key `#{k}` recursively"
-        @client.delete(k, recursive: true)
+        begin
+          DockerBoss.logger.debug "etcd: (setup) Remove key `#{k}` recursively"
+          @client.delete(k, recursive: true)
+        rescue ::Etcd::KeyNotFound
+        end
       when 'ensure'
         DockerBoss.logger.debug "etcd: (setup) Set key `#{k}` => `#{v}`"
         @client.set(k, value: v)
