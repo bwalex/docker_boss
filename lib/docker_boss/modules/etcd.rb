@@ -34,6 +34,9 @@ class DockerBoss::Module::Etcd < DockerBoss::Module
           @client.delete(k, recursive: true)
         rescue ::Etcd::KeyNotFound
         end
+      when 'ensure_dir'
+        DockerBoss.logger.debug "etcd: (setup) Set key `#{k}` (dir)"
+        @client.set(k, dir: true)
       when 'ensure'
         DockerBoss.logger.debug "etcd: (setup) Set key `#{k}` => `#{v}`"
         @client.set(k, value: v)

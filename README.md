@@ -255,6 +255,7 @@ The `server` setting defines the host and port of the etcd server. SSL and basic
 The `setup` setting is a template, each line of which can manipulate keys in etcd. These key manipulations are run once when the module/DockerBoss starts, and can be used to ensure a clean slate, free of any old keys from a previous run. The `setup` template can use the `interface_ipv4` and `interface_ipv6` helpers. Each line must follow one of the following formats:
 
  - `ensure <key> <value>` - sets a given key in etcd to the given value.
+ - `ensure_dir <key>` - creates the given key as a directory in etcd.
  - `absent <key>` - removes a given key in etcd.
  - `absent_recursive <key>` removes a key and all its children.
 
