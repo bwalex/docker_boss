@@ -44,6 +44,15 @@ class DockerBoss::CLI < Thor
     rescue Docker::Error::DockerError => e
       DockerBoss.logger.fatal "Error communicating with Docker: #{e.message}"
       exit 1
+    rescue SignalException => e
+      case Signal.signame(e.signo)
+      when "TERM", "INT"
+        DockerBoss.logger.info "Received SIGTERM/SIGINT, shutting down."
+        exit 0
+      else
+        DockerBoss.logger.fatal "Fatal unhandled signal in event loop: #{Signal.signame(e.signo)}"
+        e.backtrace.each { |line| DockerBoss.logger.fatal "    #{line}" }
+      end
     rescue Exception => e
       DockerBoss.logger.fatal "Fatal unhandled exception in event loop: #{e.class.name} -> #{e.message}"
       e.backtrace.each { |line| DockerBoss.logger.fatal "    #{line}" }
