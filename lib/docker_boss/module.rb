@@ -10,7 +10,24 @@ module DockerBoss::ModuleManager
   end
 
   def self.[](key)
-    raise IndexError, "Unnknown module #{key}" unless @modules.has_key? key
+    key = key.downcase
+
+    unless @modules.has_key? key
+      path = "docker_boss/module/#{key}"
+
+      spec = Gem::Specification.find_by_path(path)
+      unless spec.nil?
+        spec.activate
+        DockerBoss.logger.info "Activated gem `#{spec.full_name}`"
+      end
+
+      begin
+        require path
+      rescue LoadError
+      end
+    end
+
+    raise IndexError, "Unknown module #{key}" unless @modules.has_key? key
     @modules[key]
   end
 end
