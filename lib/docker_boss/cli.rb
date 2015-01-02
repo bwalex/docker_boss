@@ -80,6 +80,8 @@ class DockerBoss::CLI < Thor
 
       @logger.level = options[:debug] ? Logger::DEBUG : Logger::INFO
       DockerBoss.logger=(@logger)
+
+      DockerBoss.logger.info "DockerBoss version #{DockerBoss::VERSION} starting up"
     end
 
     def read_config
