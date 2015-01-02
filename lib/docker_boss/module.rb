@@ -17,8 +17,8 @@ module DockerBoss::ModuleManager
 
       spec = Gem::Specification.find_by_path(path)
       unless spec.nil?
-        spec.activate
-        DockerBoss.logger.info "Activated gem `#{spec.full_name}`"
+        activated = spec.activate
+        DockerBoss.logger.info "Activated gem `#{spec.full_name}`" if activated
       end
 
       begin

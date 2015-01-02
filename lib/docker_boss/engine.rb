@@ -1,8 +1,5 @@
 require 'docker_boss'
 require 'docker_boss/module'
-require 'docker_boss/modules/templates'
-require 'docker_boss/modules/dns'
-require 'docker_boss/modules/etcd'
 require 'docker'
 require 'thread'
 require 'thwait'
