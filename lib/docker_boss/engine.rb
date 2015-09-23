@@ -5,22 +5,33 @@ require 'thread'
 require 'thwait'
 
 class DockerBoss::Engine
-  def initialize(options, config)
+  attr_accessor :modules
+
+  class DSLProxy
+    attr_reader :target
+
+    def initialize(obj)
+      @target = obj
+    end
+
+    def method_missing(sym, *args, &block)
+      target.send(:modules) << DockerBoss::Module[sym].build(*args, &block)
+    end
+  end
+
+  def initialize(options, config_file)
     @containers = []
     @options = options
-    @config = config
     @mutex = Mutex.new
     @last_etcds
     @modules = []
 
-    @config.each do |k,v|
-      @modules << DockerBoss::ModuleManager[k].new(v)
-    end
+    DSLProxy.new(self).instance_eval(File.open(config_file).read, config_file)
   end
 
-  def trigger(id = nil)
+  def trigger(event = nil)
     @modules.each do |mod|
-      mod.trigger(@containers, id)
+      mod.trigger(@containers, event)
     end
   end
 
@@ -57,7 +68,7 @@ class DockerBoss::Engine
         else
           refresh_all
         end
-        trigger(event[:id])
+        trigger(event)
       }
     when 'die' # 'destroy', 'kill', 'stop' also trigger 'die'
       @mutex.synchronize {
@@ -66,7 +77,7 @@ class DockerBoss::Engine
         else
           refresh_all
         end
-        trigger(event[:id])
+        trigger(event)
       }
     when 'pause'
     when 'unpause'

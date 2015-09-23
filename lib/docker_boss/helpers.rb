@@ -38,7 +38,7 @@ module DockerBoss::Helpers
     changes
   end
 
-  module TemplateHelpers
+  module Mixin
     def as_json(hash)
       hash.to_json
     end

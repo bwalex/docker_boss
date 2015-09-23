@@ -15,7 +15,6 @@ class DockerBoss::CLI < Thor
   method_option :debug,  :aliases => "-d", :type => :boolean, :default => false, :desc => "Specify this option to run with debug logging enabled"
   def once
     setup_logging
-    read_config
     begin
       engine.refresh_and_trigger
     rescue Docker::Error::DockerError => e
@@ -32,7 +31,6 @@ class DockerBoss::CLI < Thor
   method_option :incr_refresh,                    :type => :boolean, :default => false
   def watch
     setup_logging
-    read_config
 
     thw = engine.event_loop
 
@@ -63,7 +61,7 @@ class DockerBoss::CLI < Thor
   no_tasks do
     def engine
       @engine ||= begin
-        engine = DockerBoss::Engine.new(options, @config)
+        engine = DockerBoss::Engine.new(options, options[:config])
         engine
       end
     end
@@ -82,15 +80,6 @@ class DockerBoss::CLI < Thor
       DockerBoss.logger=(@logger)
 
       DockerBoss.logger.info "DockerBoss version #{DockerBoss::VERSION} starting up"
-    end
-
-    def read_config
-      begin
-        @config = YAML.load_file(options[:config])
-      rescue SyntaxError => e
-        DockerBoss.logger.fatal "Error loading config: #{e.message}"
-        exit 1
-      end
     end
   end
 end

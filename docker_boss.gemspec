@@ -20,7 +20,7 @@ Gem::Specification.new do |spec|
 
   spec.required_ruby_version = '>= 1.9.3'
 
-  spec.add_dependency "docker-api", "~> 1.17.0"
+  spec.add_dependency "docker-api", "~> 1.22.0"
   spec.add_dependency "thor", "~> 0.19.1"
   spec.add_dependency "daemons", "~> 1.1.9"
   spec.add_dependency "rubydns", "~> 0.9.2"
