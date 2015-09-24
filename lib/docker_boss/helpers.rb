@@ -7,7 +7,7 @@ module DockerBoss::Helpers
   def self.render_erb(template_str, data)
     tmpl = ERB.new(template_str)
     ns = OpenStruct.new(data)
-    ns.extend(TemplateHelpers)
+    ns.extend(Mixin)
     tmpl.result(ns.instance_eval { binding })
   end
 
