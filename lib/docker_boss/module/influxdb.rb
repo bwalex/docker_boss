@@ -8,7 +8,7 @@ require 'net/http'
 require 'uri'
 require 'cgi'
 
-class DockerBoss::Module::InfluxDB < DockerBoss::Module::Base
+class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
   class Error < StandardError; end
 
   class Config
@@ -90,7 +90,7 @@ class DockerBoss::Module::InfluxDB < DockerBoss::Module::Base
   end
 
   def self.build(&block)
-    DockerBoss::Module::InfluxDB.new(&block)
+    DockerBoss::Module::Influxdb.new(&block)
   end
 
   def initialize(&block)
@@ -214,7 +214,7 @@ class DockerBoss::Module::InfluxDB < DockerBoss::Module::Base
 
     begin
       do_post! data
-    rescue DockerBoss::Module::InfluxDB::Error => e
+    rescue DockerBoss::Module::Influxdb::Error => e
       DockerBoss.logger.error "influxdb: Error posting update: #{e.message}"
     rescue Net::OpenTimeout => e
       DockerBoss.logger.error "influxdb: Error posting update: #{e.message}"
