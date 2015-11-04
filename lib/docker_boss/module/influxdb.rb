@@ -8,7 +8,7 @@ require 'net/http'
 require 'uri'
 require 'cgi'
 
-class DockerBoss::Module::InfluxDB < DockerBoss::Module
+class DockerBoss::Module::InfluxDB < DockerBoss::Module::Base
   class Error < StandardError; end
 
   class Config
