@@ -76,7 +76,7 @@ class DockerBoss::Module::Etcd < DockerBoss::Module::Base
 
     def set(k, v)
       DockerBoss.logger.debug "etcd: (setup) Set key `#{k}` => `#{v}`"
-      @client.set(k, value: v)
+      @client.set(k, value: v.to_json)
     end
   end
 
@@ -132,12 +132,12 @@ class DockerBoss::Module::Etcd < DockerBoss::Module::Base
 
     changes[:added].each do |k,v|
       DockerBoss.logger.debug "etcd: Add key `#{k}` => `#{v}`"
-      @client.set(k, value: v)
+      @client.set(k, value: v.to_json)
     end
 
     changes[:changed].each do |k,v|
       DockerBoss.logger.debug "etcd: Update key `#{k}` => `#{v}`"
-      @client.set(k, value: v)
+      @client.set(k, value: v.to_json)
     end
   end
 
