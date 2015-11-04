@@ -127,7 +127,8 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
   end
 
   def do_post!(data)
-    request = Net::HTTP::Post.new("/write?db=#{CGI.escape(@config.database)}")
+    # Telegraf does: POST /write?consistency=&db=telegraf&precision=s&q=CREATE+DATABASE+telegraf&rp= HTTP/1.1
+    request = Net::HTTP::Post.new("/write?db=#{CGI.escape(@config.database)}&precision=s")
     request.basic_auth @config.user, @config.pass
     request.add_field('Content-Type', 'text/plain')
     request.body = line_protocol(data)
@@ -259,7 +260,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
           measurement: "#{container[:prefix]}#{k}",
           tags:        container[:tags],
           value:       v,
-          timestamp:   "#{time_now}000000000"
+          timestamp:   time_now
         }
       end
     end
