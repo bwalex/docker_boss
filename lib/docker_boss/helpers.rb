@@ -1,6 +1,7 @@
 require 'yaml'
 require 'erb'
 require 'ostruct'
+require 'socket'
 require 'json'
 
 module DockerBoss::Helpers
