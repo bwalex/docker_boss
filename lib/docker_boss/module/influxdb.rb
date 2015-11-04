@@ -22,7 +22,7 @@ class DockerBoss::Module::InfluxDB < DockerBoss::Module
       @host = 'localhost'
       @port = 8086
       @database = 'containers'
-      @prefix = (c) -> "container.#{c[:name]}."
+      @prefix = ->(c) { "container.#{c[:name]}." }
       @interval = 60
       @cgroup_path = '/sys/fs/cgroup'
       @use_ints = false
