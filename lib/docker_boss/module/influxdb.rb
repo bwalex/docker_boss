@@ -158,7 +158,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
   def line_protocol(data)
     lines =
       data.map do |d|
-        m_t = [ line_escape(d[:measurement]) ] + d[:tags].map { |k,v| "#{line_escape(k)}=#{line_escape(v)}" }
+      m_t = [ line_escape(d[:measurement]) ] + d[:tags].map { |k,v| "#{line_escape(k.to_s)}=#{line_escape(v.to_s)}" }
 
         "#{m_t.join(',')} value=#{line_value(d[:value])} #{d[:timestamp]}"
       end
