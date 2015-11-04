@@ -210,7 +210,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
 
     futures = containers.map { |c| @pool.future :sample_container, c }
 
-    data = futures.map { |f| f.value }
+    data = futures.flat_map { |f| f.value }
 
     begin
       do_post! data
