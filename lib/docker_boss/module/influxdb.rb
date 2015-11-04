@@ -242,6 +242,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
 
     def sample_container(container)
       time_now = Time.now.to_i
+      data = {}
 
       kv_sample(container[:id], 'memory', 'memory.stat', 'memory') { |k,v| data[k] = v }
       kv_sample(container[:id], 'cpuacct', 'cpuacct.stat', 'cpuacct') { |k,v| data[k] = v }
