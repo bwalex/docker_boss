@@ -62,39 +62,39 @@ class DockerBoss::Module::Templates < DockerBoss::Module::Base
       end
 
       def container_shell(c, cmd, opts = {})
-        self.actions << { :action => :container_shell, :cmd => cmd, :container => c, :opts => opts }
+        self.actions << { action: :container_shell, cmd: cmd, container: c, opts: opts }
       end
 
       def container_exec(c, cmd, opts = {})
-        self.actions << { :action => :container_exec, :cmd => cmd, :container => c, :opts => opts }
+        self.actions << { action: :container_exec, cmd: cmd, container: c, opts: opts }
       end
 
       def container_start(c, opts = {})
-        self.actions << { :action => :container_start, :container => c, :opts => opts }
+        self.actions << { action: :container_start, container: c, opts: opts }
       end
 
       def container_stop(c, opts = {})
-        self.actions << { :action => :container_stop, :container => c, :opts => opts }
+        self.actions << { action: :container_stop, container: c, opts: opts }
       end
 
       def container_restart(c, opts = {})
-        self.actions << { :action => :container_restart, :container => c, :opts => opts }
+        self.actions << { action: :container_restart, container: c, opts: opts }
       end
 
       def container_pause(c, opts = {})
-        self.actions << { :action => :container_pause, :container => c, :opts => opts }
+        self.actions << { action: :container_pause, container: c, opts: opts }
       end
 
       def container_unpause(c, opts = {})
-        self.actions << { :action => :container_unpause, :container => c, :opts => opts }
+        self.actions << { action: :container_unpause, container: c, opts: opts }
       end
 
       def container_kill(c, opts = {})
-        self.actions << { :action => :container_kill, :container => c, :opts => opts }
+        self.actions << { action: :container_kill, container: c, opts: opts }
       end
 
       def host_shell(cmd)
-        self.actions << { :action => :host_shell, :cmd => cmd }
+        self.actions << { action: :host_shell, cmd: cmd }
       end
     end
 
@@ -159,15 +159,15 @@ class DockerBoss::Module::Templates < DockerBoss::Module::Base
       c = nil
 
       if spec.is_a? String
-        c ||= (Docker::Container.all(:all => true).find { |c| c.json['Id'] == "#{spec}" })
-        c ||= (Docker::Container.all(:all => true).find { |c| c.json['Name'] == "/#{spec}" })
+        c ||= (Docker::Container.all(:all => true).find { |k| k.json['Id'] == "#{spec}" })
+        c ||= (Docker::Container.all(:all => true).find { |k| k.json['Name'] == "/#{spec}" })
       elsif spec.respond_to? :json
-        c ||= (Docker::Container.all(:all => true).find { |c| c.json['Id'] == "#{spec.json['Id']}" })
-        c ||= (Docker::Container.all(:all => true).find { |c| c.json['Name'] == "#{spec.json['Name']}" })
+        c ||= (Docker::Container.all(:all => true).find { |k| k.json['Id'] == "#{spec.json['Id']}" })
+        c ||= (Docker::Container.all(:all => true).find { |k| k.json['Name'] == "#{spec.json['Name']}" })
       elsif spec.respond_to? :has_key and spec.has_key? 'Id'
-        c ||= (Docker::Container.all(:all => true).find { |c| c.json['Id'] == "#{spec['Id']}" })
+        c ||= (Docker::Container.all(:all => true).find { |k| k.json['Id'] == "#{spec['Id']}" })
       elsif spec.respond_to? :has_key and spec.has_key? 'Name'
-        c ||= (Docker::Container.all(:all => true).find { |c| c.json['Name'] == "#{spec['Name']}" })
+        c ||= (Docker::Container.all(:all => true).find { |k| k.json['Name'] == "#{spec['Name']}" })
       end
 
       raise IndexError, "unknown container: #{spec}" unless c != nil

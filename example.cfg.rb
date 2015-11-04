@@ -1,5 +1,5 @@
 etcd do
-  host interface_ipv4('lo0')
+  host interface_ipv4('docker0')
   port 4001
 
   setup do
@@ -82,19 +82,30 @@ templates do
   end
 end
 #
-#influxdb do
-#  protocol  :http
-#  host      'loclahost'
-#  port      8086
-#  user      'root'
-#  pass      'root'
-#  no_verify false
-#  database  'db1'
-#
-#  prefix    'container.'
-#  interval  90
-#
-#  allow /.*/
-#
-#  cgroup_path '/sys/fs/cgroup'
-#end
+influxdb do
+  protocol  :http
+  host      'localhost'
+  port      8086
+  user      'root'
+  pass      'root'
+  no_verify false
+  database  'db1'
+  # use_ints true
+
+  #prefix    { |c| "container.#{c[:name]}." }
+  prefix 'containers.'
+
+  tags do |c|
+    {
+      dc:             'paris-1',
+      server:         'miau',
+      container_name: c[:name],
+      container_id:   c[:id]
+    }
+  end
+  interval  90
+
+  # allow /.*/
+
+  cgroup_path '/sys/fs/cgroup'
+end

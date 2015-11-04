@@ -23,7 +23,6 @@ class DockerBoss::Engine
     @containers = []
     @options = options
     @mutex = Mutex.new
-    @last_etcds
     @modules = []
 
     DSLProxy.new(self).instance_eval(File.open(config_file).read, config_file)
