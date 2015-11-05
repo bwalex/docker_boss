@@ -175,12 +175,12 @@ class DockerBoss::Module::Templates < DockerBoss::Module::Base
       c
     end
 
-    def trigger(containers, trigger_id = nil)
+    def trigger(containers, _trigger_id = nil)
       (containers.select { |c| @patterns.inject(false) { |match,p| match || p.match(c['Name']) } }).each do |c|
         @files = []
         @actions = []
         DSLProxy.new(self).instance_exec(c, containers, &@block)
-        changed = @files.inject (false) { |changed,f| do_file(f, c, containers) || changed }
+        changed = @files.inject(false) { |change,f| do_file(f, c, containers) || change }
         DockerBoss.logger.info "templates: Instance `#{@patterns.join(", ")}`: triggered; changed=#{changed}"
         do_actions if changed
       end

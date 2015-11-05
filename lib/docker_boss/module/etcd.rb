@@ -24,7 +24,7 @@ class DockerBoss::Module::Etcd < DockerBoss::Module::Base
     end
 
     def change_block
-      @change_block || Proc.new { |c| }
+      @change_block || Proc.new { |_| }
     end
 
     def change_block=(block)
@@ -120,12 +120,12 @@ class DockerBoss::Module::Etcd < DockerBoss::Module::Base
     @change_process = ChangeProcess.new(@config.change_block)
   end
 
-  def trigger(containers, trigger_id)
+  def trigger(containers, _trigger_id)
     new_keys = @change_process.handle(containers)
     changes = DockerBoss::Helpers.hash_diff(@previous_keys, new_keys)
     @previous_keys = new_keys
 
-    changes[:removed].each do |k,v|
+    changes[:removed].each do |k,_|
       DockerBoss.logger.debug "etcd: Remove key `#{k}`"
       @client.delete(k)
     end

@@ -28,7 +28,7 @@ class DockerBoss::Module::DNS < DockerBoss::Module::Base
     end
 
     def change_block
-      @change_block || Proc.new { |c| }
+      @change_block || Proc.new { |_| }
     end
 
     def change_block=(block)
@@ -95,8 +95,8 @@ class DockerBoss::Module::DNS < DockerBoss::Module::Base
         @names = []
         @container.instance_exec c, &@block
         names.each do |n|
-          (@records[:A] ||= {})[names] = c['NetworkSettings']['IPAddress'] if c['NetworkSettings']['IPAddress'] != ''
-          (@records[:AAAA] ||= {})[names] = c['NetworkSettings']['GlobalIPv6Address'] if c['NetworkSettings']['GlobalIPv6Address'] != ''
+          (@records[:A] ||= {})[n] = c['NetworkSettings']['IPAddress'] if c['NetworkSettings']['IPAddress'] != ''
+          (@records[:AAAA] ||= {})[n] = c['NetworkSettings']['GlobalIPv6Address'] if c['NetworkSettings']['GlobalIPv6Address'] != ''
         end
       end
       @records
@@ -150,7 +150,7 @@ class DockerBoss::Module::DNS < DockerBoss::Module::Base
     end
   end
 
-  def trigger(containers, trigger_id)
+  def trigger(containers, _trigger_id)
     @records = @change_process.handle(containers, setup_records)
   end
 

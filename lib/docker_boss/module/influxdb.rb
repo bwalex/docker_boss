@@ -84,7 +84,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
 
       def cgroup_path(p)
         self.cgroup_path = p
-        self.cgroup_docker = File.exists? "#{p}/blkio/docker"
+        self.cgroup_docker = File.exist? "#{p}/blkio/docker"
       end
     end
   end
@@ -175,7 +175,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
     end
   end
 
-  def trigger(containers, trigger_id)
+  def trigger(containers, _trigger_id)
     @mutex.synchronize {
       @containers = containers
     }
@@ -294,7 +294,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
       data = {}
 
       File.readlines(build_path(id, type, file)).each do |line|
-        (maj_min,v) = line.chomp.split(/\s+/, 2)
+        (_,v) = line.chomp.split(/\s+/, 2)
         data[key] ||= 0
         data[key] += v.to_i
       end
