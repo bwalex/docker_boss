@@ -51,7 +51,7 @@ class DockerBoss::CLI < Thor
         DockerBoss.logger.fatal "Fatal unhandled signal in event loop: #{Signal.signame(e.signo)}"
         e.backtrace.each { |line| DockerBoss.logger.fatal "    #{line}" }
       end
-    rescue Exception => e
+    rescue StandardError => e
       DockerBoss.logger.fatal "Fatal unhandled exception in event loop: #{e.class.name} -> #{e.message}"
       e.backtrace.each { |line| DockerBoss.logger.fatal "    #{line}" }
       exit 1

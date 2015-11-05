@@ -38,7 +38,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
       include DockerBoss::Helpers::Mixin
 
       def protocol(p)
-        raise ArgumentError, "Unknown InfluxDB protocol #{p}" unless ['http', 'https'].include? p.to_s
+        fail ArgumentError, "Unknown InfluxDB protocol #{p}" unless ['http', 'https'].include? p.to_s
         self.protocol = p.to_s
       end
 
@@ -122,7 +122,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
 
   def test_connection!
     response = do_query('list series')
-    raise Error.new response.body unless response.kind_of? Net::HTTPSuccess
+    fail Error, response.body unless response.kind_of? Net::HTTPSuccess
     DockerBoss.logger.debug "influxdb: Connection tested successfully"
   end
 
@@ -133,7 +133,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
     request.add_field('Content-Type', 'text/plain')
     request.body = line_protocol(data)
     response = connection.request(request)
-    raise Error.new response.body unless response.kind_of? Net::HTTPSuccess
+    fail Error, response.body unless response.kind_of? Net::HTTPSuccess
   end
 
   def line_escape(v)
@@ -176,9 +176,9 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
   end
 
   def trigger(containers, _trigger_id)
-    @mutex.synchronize {
+    @mutex.synchronize do
       @containers = containers
-    }
+    end
   end
 
   def sample

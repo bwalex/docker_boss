@@ -45,16 +45,16 @@ module DockerBoss::Helpers
     end
 
     def interface_ipv4(iface)
-      ifaddr = Socket::getifaddrs().select!{|i| i.name == iface && i.addr.ipv4? }.first
-      raise ArgumentError, "Could not retrieve IPv4 address for interface `#{iface}`" if ifaddr.nil?
+      ifaddr = Socket.getifaddrs.select { |i| i.name == iface and i.addr.ipv4? }.first
+      fail ArgumentError, "Could not retrieve IPv4 address for interface `#{iface}`" if ifaddr.nil?
 
       ifaddr.addr.ip_address
     end
 
     def interface_ipv6(iface)
       # prefer routable address over link-local
-      ifaddr = Socket::getifaddrs().select!{|i| i.name == iface && i.addr.ipv6? }.sort_by {|x| x.addr.ipv6_linklocal? ? 1 : 0 }.first
-      raise ArgumentError, "Could not retrieve IPv6 address for interface `#{iface}`" if ifaddr.nil?
+      ifaddr = Socket.getifaddrs.select { |i| i.name == iface and i.addr.ipv6? }.sort_by { |i| i.addr.ipv6_linklocal? ? 1 : 0 }.first
+      fail ArgumentError, "Could not retrieve IPv6 address for interface `#{iface}`" if ifaddr.nil?
 
       ifaddr.addr.ip_address
     end

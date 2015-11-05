@@ -36,26 +36,26 @@ DockerBoss can run in a one-off mode, in which it only triggers actions based on
 
 To run it in one-off mode, execute:
 
-    $ docker-boss once -c /path/to/config.yml
+    $ docker-boss once -c /path/to/config.rb
 
 To run in watch mode, execute:
 
-    $ docker-boss watch -c /path/to/config.yml
+    $ docker-boss watch -c /path/to/config.rb
 
 By default, DockerBoss runs in the foreground. If you want to run DockerBoss as a daemon, execute:
 
-    $ docker-boss watch -c /path/to/config.yml -D
+    $ docker-boss watch -c /path/to/config.rb -D
 
 Both modes support an optional log argument, which allows logging to stdout, syslog or a file:
 
-    $ docker-boss watch -c /path/to/config.yml -l syslog
-    $ docker-boss watch -c /path/to/config.yml -l -
-    $ docker-boss watch -c /path/to/config.yml -l /var/log/docker_boss.log
+    $ docker-boss watch -c /path/to/config.rb -l syslog
+    $ docker-boss watch -c /path/to/config.rb -l -
+    $ docker-boss watch -c /path/to/config.rb -l /var/log/docker_boss.log
 
 
 ## Configuration
 
-An example configuration file with some settings for each of the bundled modules is included in `example.cfg.yml`.
+An example configuration file with some settings for each of the bundled modules is included in `example.cfg.rb`.
 
 Each top-level key in the configuration file corresponds to the name of a module. All entries under that key are passed to the module for configuration of that particular module.
 
@@ -351,10 +351,35 @@ Here's a basic skeleton:
 ```ruby
 require 'docker_boss'
 require 'docker_boss/module'
+require 'docker_boss/helpers'
 
-class DockerBoss::Module::Foo < DockerBoss::Module
-  def initialize(config)
-    @config = config
+class DockerBoss::Module::Foo < DockerBoss::Module::Base
+
+  class Config
+    attr_accessor :some_knob
+
+    def initialize(block)
+      # ... parse `block` using your DSL parser
+      ConfigProxy.new(self).instance_eval(&block)
+    end
+
+    def ConfigProxy < ::SimpleDelegator
+      include DockerBoss::Helpers::MIxin
+
+      def some_knob(v)
+        self.some_knob = v
+      end
+    end
+  end
+
+  def self.build(&block)
+    # This is the class method called by the core of DockerBoss. It needs
+    # to return a new instance, configured with `block`.
+    DockerBoss::Module::Foo.new(&block)
+  end
+
+  def initialize(&block)
+    @config = Config.new(block)
     DockerBoss.logger.debug "foo: Set up with config: #{config}"
   end
 
@@ -377,7 +402,7 @@ class DockerBoss::Module::Foo < DockerBoss::Module
 end
 ```
 
-Any class extending `DockerBoss::Module` is automatically registered as a module. The name of the class defines the name of the configuration key in the config yaml. For the example above, the name of the key would be `foo`. Any key under `foo` in the config yaml would be passed as `config` to the class constructor.
+Any class extending `DockerBoss::Module::Base` is automatically registered as a module. The name of the class defines the name of the configuration key in the config yaml. For the example above, the name of the key would be `foo`. Any key under `foo` in the config yaml would be passed as `config` to the class constructor.
 
 
 ## Contributing

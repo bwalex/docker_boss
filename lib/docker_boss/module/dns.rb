@@ -146,7 +146,7 @@ class DockerBoss::Module::DNS < DockerBoss::Module::Base
     end
 
     Thread.new do
-      RubyDNS::run_server(:listen => listen, :ttl => @config.ttl, :upstream_dns => @config.upstreams, :zones => @config.zones, :server_class => Server, :supervisor_class => Server, :manager => self)
+      RubyDNS.run_server(listen: listen, ttl: @config.ttl, upstream_dns: @config.upstreams, zones: @config.zones, server_class: Server, supervisor_class: Server, manager: self)
     end
   end
 
@@ -166,8 +166,6 @@ class DockerBoss::Module::DNS < DockerBoss::Module::Base
       super(options)
       @manager = options[:manager]
 
-      puts "ho?"
-
       @ttl = options[:ttl].to_i
       @zones = options[:zones]
       servers = options[:upstream_dns].map { |ip| [:udp, ip, 53] }
@@ -177,18 +175,16 @@ class DockerBoss::Module::DNS < DockerBoss::Module::Base
 
     def process(name, resource_class, transaction)
       zone = @zones.find { |z| name =~ /#{z}$/ }
-      puts "Records:"
-      p records
 
       if [IN::AAAA].include? resource_class and
           records[:AAAA].has_key? name
-          transaction.respond!(records[:AAAA][name], :ttl => @ttl)
+          transaction.respond!(records[:AAAA][name], ttl: @ttl)
       elsif [IN::A].include? resource_class and
           records[:A].has_key? name
-          transaction.respond!(records[:A][name], :ttl => @ttl)
+          transaction.respond!(records[:A][name], ttl: @ttl)
       elsif zone
         soa = Resolv::DNS::Resource::IN::SOA.new(Resolv::DNS::Name.create("#{zone}"), Resolv::DNS::Name.create("dockerboss."), 1, @ttl, @ttl, @ttl, @ttl)
-        transaction.add([soa], :name => "#{zone}.", :ttl => @ttl, :section => :authority)
+        transaction.add([soa], name: "#{zone}.", ttl: @ttl, section: :authority)
         transaction.fail!(:NXDomain)
       else
         transaction.passthrough!(@resolver)

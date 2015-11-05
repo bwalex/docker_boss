@@ -10,10 +10,10 @@ module DockerBoss::GenericRegistry
 
   def self.underscore(str)
     str.gsub(/::/, '/').
-    gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2').
-    gsub(/([a-z\d])([A-Z])/,'\1_\2').
-    tr("-", "_").
-    downcase
+      gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2').
+      gsub(/([a-z\d])([A-Z])/,'\1_\2').
+      tr("-", "_").
+      downcase
   end
 
   module ClassMethods
@@ -22,17 +22,17 @@ module DockerBoss::GenericRegistry
     end
 
     def register(klass, *aliases)
-      key = DockerBoss::GenericRegistry::underscore(klass.name.split('::')[-1])
+      key = DockerBoss::GenericRegistry.underscore(klass.name.split('::')[-1])
       keys = [key] | aliases
       DockerBoss.logger.debug "Registering class #{key}#{aliases.empty? ? "" : " (aliases: #{aliases.join(", ")})"} for type #{@klass}"
       keys.each { |k| @registry[k.to_sym] = klass }
     end
 
     def [](klass)
-      klass = DockerBoss::GenericRegistry::underscore(klass.to_s).to_sym
+      klass = DockerBoss::GenericRegistry.underscore(klass.to_s).to_sym
 
       unless @registry.has_key? klass
-        path = "#{DockerBoss::GenericRegistry::underscore(@klass)}/#{klass}"
+        path = "#{DockerBoss::GenericRegistry.underscore(@klass)}/#{klass}"
 
         spec = Gem::Specification.find_by_path(path)
         unless spec.nil?
@@ -45,7 +45,7 @@ module DockerBoss::GenericRegistry
         rescue LoadError
         end
       end
-      raise IndexError, "Unknown class #{klass} of type #{@klass}" unless @registry.has_key? klass
+      fail IndexError, "Unknown class #{klass} of type #{@klass}" unless @registry.has_key? klass
       @registry[klass]
     end
   end

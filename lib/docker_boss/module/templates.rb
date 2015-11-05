@@ -57,7 +57,7 @@ class DockerBoss::Module::Templates < DockerBoss::Module::Base
       include DockerBoss::Helpers::Mixin
 
       def file(opts)
-        raise ArgumentError, "file needs both :template and :target options" unless opts.has_key? :template and opts.has_key? :target
+        fail ArgumentError, "file needs both :template and :target options" unless opts.has_key? :template and opts.has_key? :target
         self.files << opts
       end
 
@@ -150,7 +150,7 @@ class DockerBoss::Module::Templates < DockerBoss::Module::Base
         when :host_shell
           err ||= !system(action[:cmd])
         else
-          raise ArgumentError, "unknown action `#{action[:action]}`"
+          fail ArgumentError, "unknown action `#{action[:action]}`"
         end
       end
     end
@@ -170,7 +170,7 @@ class DockerBoss::Module::Templates < DockerBoss::Module::Base
         c ||= (Docker::Container.all(:all => true).find { |k| k.json['Name'] == "#{spec['Name']}" })
       end
 
-      raise IndexError, "unknown container: #{spec}" unless c != nil
+      fail IndexError, "unknown container: #{spec}" unless c != nil
 
       c
     end
