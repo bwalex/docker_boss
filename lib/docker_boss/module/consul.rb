@@ -48,6 +48,8 @@ require 'cgi'
 
 class DockerBoss::Module::Consul < DockerBoss::Module::Base
   class Client
+    class Error < StandardError; end
+
     def initialize(host, port, protocol = :http, no_verify = false)
       @host = host
       @port = port
@@ -90,7 +92,7 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
     end
 
     def delete(k, recursive = false)
-      path = "/v1/kv/#{k}"
+      path = "/v1/kv#{k}"
       path += "?recurse" if recursive
       request = Net::HTTP::Put.new(path)
       response = connection.request(request)
@@ -98,14 +100,14 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
     end
 
     def set(k, v)
-      request = Net::HTTP::Put.new("/v1/kv/#{k}")
+      request = Net::HTTP::Put.new("/v1/kv#{k}")
       request.body = v
       response = connection.request(request)
       fail Error unless response.kind_of? Net::HTTPSuccess
     end
 
     def get(k)
-      request = Net::HTTP::Get.new("/v1/kv/#{k}")
+      request = Net::HTTP::Get.new("/v1/kv#{k}")
       response = connection.request(request)
       fail Error unless response.kind_of? Net::HTTPSuccess
       data = JSON.parse(response.body)
@@ -200,7 +202,7 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
 
     def service(id, desc)
       DockerBoss.logger.debug "consul: (setup) Add service `#{k}`"
-      @client.service_create(k, ::DockerBoss::Module::Consul.xlate_service(v, @config))
+      @client.service_create(::DockerBoss::Module::Consul.xlate_service(k, v, @config))
     end
 
     def absent_services(*tags)
@@ -228,7 +230,7 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
       @values = {}
       @services = {}
       containers.each { |c| @container.instance_exec c, &@block }
-      @values,@services
+      [@values,@services]
     end
 
     class ChangeProxy < ::SimpleDelegator
@@ -251,8 +253,9 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
   def initialize(&block)
     @config = Config.new(block)
     DockerBoss.logger.debug "consul: Set up to connect to #{@config.host}, port #{@config.port}"
-    @client = Client.new(host: @config.host, port: @config.port)
+    @client = Client.new(@config.host, @config.port, @config.protocol, @config.no_verify)
     @previous_keys = {}
+    @previous_services = {}
     setup
   end
 
@@ -290,13 +293,13 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
 
     service_changes[:added].each do |k,v|
       DockerBoss.logger.debug "consul: Add service `#{k}`"
-      @client.service_create(k, xlate_service(v, @config))
+      @client.service_create(::DockerBoss::Module::Consul.xlate_service(k, v, @config))
     end
 
     service_changes[:changed].each do |k,v|
       DockerBoss.logger.debug "consul: Update service `#{k}`"
       @client.service_delete(k)
-      @client.service_create(k, xlate_service(v))
+      @client.service_create(::DockerBoss::Module::Consul.xlate_service(k, v))
     end
   end
 
@@ -315,16 +318,18 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
     ]
   end
 
-  def self.xlate_service(s, @config)
+  def self.xlate_service(k, s, config)
     specials = {
       :id => 'ID',
       :http => 'HTTP',
       :ttl => 'TTL'
     }
 
+    s[:id] = k
+
     s = rename_keys(s, specials)
 
-    s['Tags'] = (s['Tags'] || []) + @config.default_tags
+    s['Tags'] = (s['Tags'] || []) + config.default_tags
     s
   end
 end
