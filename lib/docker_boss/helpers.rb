@@ -58,5 +58,10 @@ module DockerBoss::Helpers
 
       ifaddr.addr.ip_address
     end
+
+    def skydns_key(*parts, opts = {})
+      key = (opts.has_key? :prefix) ? opts[:prefix] || '/skydns'
+      key += '/' + parts.join('.').split('.').reverse.join('/')
+    end
   end
 end

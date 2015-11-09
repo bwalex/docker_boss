@@ -3,9 +3,15 @@ etcd do
   port 4001
 
   setup do
-    absent "/skydns/docker", recursive: true
+    absent '/skydns/docker', recursive: true
+    absent '/vhosts', recursive: true
+    absent '/http_auth/vhosts', recursive: true
+
     set "/skydns/docker/dockerhost/etcd", host: interface_ipv4('docker0'),
                                           port: 4001
+
+    dir '/vhosts'
+    dir '/http_auth/vhosts'
   end
 
   change do |c|
@@ -13,21 +19,15 @@ etcd do
     if c['Config']['Env'].has_key? 'SERVICES'
       c['Config']['Env']['SERVICES'].split(',').each do |s|
         (name,port) = s.split(':')
-        dns_path = name.split('.').reverse.join('/')
 
-        set "/skydns/#{dns_path}", host: c['NetworkSettings']['IPAddress'],
-                                   port: port
+        set skydns_key(name), host: c['NetworkSettings']['IPAddress'],
+                              port: port
       end
     elsif c['Config']['Env'].has_key? 'SERVICE_NAME'
-      dns_path = c['Config']['Env']['SERVICE_NAME'].split('.').reverse.join('/')
-
-      set "/skydns/#{dns_path}", host: c['NetworkSettings']['IPAddress']
+      set skydns_key(c['Config']['Env']['SERVICE_NAME']), host: c['NetworkSettings']['IPAddress']
     else
-      dns_hname = (c['Config']['Hostname'] + ".docker").split('.').reverse.join('/')
-      dns_name = (c['Name'][1..-1] + ".docker").split('.').reverse.join('/')
-
-      set "/skydns/#{dns_hname}", host: c['NetworkSettings']['IPAddress']
-      set "/skydns/#{dns_name}",  host: c['NetworkSettings']['IPAddress']
+      set skydns_key(c['Config']['Hostname'], 'docker'), host: c['NetworkSettings']['IPAddress']
+      set skydns_key(c['Name'][1..-1], 'docker'), host: c['NetworkSettings']['IPAddress']
     end
 
     # VHosts
@@ -37,6 +37,65 @@ etcd do
 
       set "/vhosts/#{host}/#{c['Id']}", host: c['NetworkSettings']['IPAddress'],
                                         port: port
+    end
+
+    c['Config']['Env'].fetch('VHOSTS_AUTH', '').split(',').each do |vh|
+      host = vh.split(':')[0]
+
+      set "/http_auth/vhosts/#{host}", userlist: vh.split(':')[1],
+                                       groups: vh.split(':')[2..-1]
+    end
+  end
+end
+
+consul do
+  host interface_ipv4('docker0')
+  port 8500
+  protocol :http
+  default_tags :docker_boss
+
+  setup do
+    absent_services :docker_boss
+    absent '/vhosts', recursive: true
+    absent '/http_auth/vhosts', recursive: true
+
+    dir '/vhosts'
+    dir '/http_auth/vhosts'
+  end
+
+  change do |c|
+    # Services
+    if c['Config']['Env'].has_key? 'SERVICES'
+      c['Config']['Env']['SERVICES'].split(',').each do |s|
+        service c['Id'], name: name,
+                         address: c['NetworkSettings']['IPAddress'],
+                         port: port
+      end
+    elsif c['Config']['Env'].has_key? 'SERVICE_NAME'
+      service c['Id'], name: c['Config']['Env']['SERVICE_NAME'],
+                       address: c['NetworkSettings']['IPAddress']
+    else
+      service c['Id'], name: c['Config']['Hostname'],
+                       address: c['NetworkSettings']['IPAddress']
+
+      service c['Id'], name: c['Name'][1..-1],
+                       address: c['NetworkSettings']['IPAddress']
+    end
+
+    # VHosts
+    c['Config']['Env'].fetch('VHOSTS', '').split(',').each do |vh|
+      host = vh.split(':')[0]
+      port = vh.split(':').fetch(1, 80)
+
+      set "/vhosts/#{host}/#{c['Id']}", host: c['NetworkSettings']['IPAddress'],
+                                        port: port
+    end
+
+    c['Config']['Env'].fetch('VHOSTS_AUTH', '').split(',').each do |vh|
+      host = vh.split(':')[0]
+
+      set "/http_auth/vhosts/#{host}", userlist: vh.split(':')[1],
+                                       groups: vh.split(':')[2..-1]
     end
   end
 end
