@@ -1,14 +1,18 @@
 # DockerBoss
 
-DockerBoss monitors Docker containers and keeps track of when a container is started, stopped, changed, etc. On such an event, DockerBoss triggers actions such as updating files, controlling other containers, updating entries in etcd, updating records in a built-in DNS server, etc.
+DockerBoss monitors Docker containers and keeps track of when a container is started, stopped, changed, etc. On such an event, DockerBoss triggers actions such as updating files, controlling other containers, updating entries in etcd, registering/deregistering consul services, collecting container statistics, updating records in a built-in DNS server, etc.
 
-DockerBoss has been built from the start to be completely pluggable. By default, it ships with 3 different modules:
+DockerBoss has been built from the start to be completely pluggable. By default, it ships with 5 different modules:
 
  - templates: Allows re-rendering configuration files on e.g. a docker volume and then performing an action on either the host or a container, such as restarting, sending a signal, etc.
 
  - etcd: Allows inserting/removing keys in etcd depending on the currently running containers. This allows, for example, automatically updating etcd entries for a service such as SkyDNS when a container changes IP because it is restarted.
 
+ - consul: Allows inserting/removing keys in consul's key-value store, as well as registering and deregistering services depending on the currently running containers.
+
  - dns: The dns module has a very simple built-in DNS server. The DNS server's records get updated based on the container's addresses, names, environment variables, etc. The DNS server will pass through requests for zones that it is not the authoritative server for.
+
+ - influx: The influx module can collect statistics from per-container cgroups on a regular interval, including CPU usage, memory usage, etc, and post the data to an InfluxDB instance.
 
 The pluggable design of DockerBoss, alongside the flexibility offered by the default modules, makes it possible to adapt DockerBoss to a large number of different use cases and scenarios, without being tied down to one particular convention as others do.
 
