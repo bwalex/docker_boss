@@ -224,22 +224,26 @@ The templates themselves should also be ERB templates. They will be rendered wit
 
 Example configuration:
 
-```yaml
-templates:
-  auto_haproxy:
-    linked_container:
-      name:   "front-haproxy"
-      action: "kill:SIGHUP"
-      # Other examples:
-      # action: "shell:cat /proc/cpuinfo > /tmp/cpuinfo"
-      # action: "exec:touch /tmp/foobar"
-      # action: "restart"
+```ruby
+templates do
+  container /mydb$/ do |c,all_containers|
+    file template: "#{c['Volumes']['/var/lib/mysql']}/foo.cfg.erb",
+         target:   "#{c['Volumes']['/var/lib/mysql']}/foo.cfg"
 
-    files:
-      - file:     "<%= container['Volumes']['/etc/haproxy/proxies'] %>/proxies.cfg"
-        template: "<%= container['Volumes']['/etc/haproxy/proxies'] %>/proxies.cfg.erb"
+    # All these actions are only executed if any of the files changes
+    container_restart c['Id']
+    # container_shell , bg: true
+    # container_exec  , bg: true
+    # container_start
+    # container_stop
+    # container_restart
+    # container_pause
+    # container_unpause
+    # container_kill , signal: "SIGHUP"
 
-    action: "echo 'This happens on the host' > /tmp/foo.test"
+    host_shell "echo 'This happens on the host' > /tmp/foo.test"
+  end
+end
 ```
 
 A very simple example template file could look as follows:
@@ -271,36 +275,114 @@ The etcd module will keep track of keys set during previous state updates, and i
 
 Example configuration:
 
-```yaml
-etcd:
-  server:
-    host: <%= interface_ipv4('docker0') %>
-    port: 4001
+```ruby
+etcd do
+  host interface_ipv4('docker0')
+  port 4001
 
-  setup: |
-    absent_recursive /skydns/docker
-    absent_recursive /vhosts
-    ensure /skydns/docker/dockerhost/etcd <%= as_json(host: interface_ipv4('docker0'), port: 4001) %>
+  setup do
+    absent '/skydns/docker', recursive: true
+    absent '/vhosts', recursive: true
+    absent '/http_auth/vhosts', recursive: true
 
-  sets:
-    skydns: |
-      <% if container['Config']['Env'].has_key? 'SERVICES' %>
-        <% container['Config']['Env']['SERVICES'].split(',').each do |s| %>
-          ensure <%= "/skydns/#{s.split(':')[0].split('.').reverse.join('/')}" %> <%= as_json(host: container['NetworkSettings']['IPAddress'], port: s.split(':')[1].to_i) %>
-        <% end %>
-      <% elsif container['Config']['Env'].has_key? 'SERVICE_NAME' %>
-        ensure <%= "/skydns/#{container['Config']['Env']['SERVICE_NAME'].split('.').reverse.join('/')}" %> <%= as_json(host: container['NetworkSettings']['IPAddress']) %>
-      <% else %>
-        ensure <%= "/skydns/#{(container['Config']['Hostname'] + ".docker").split('.').reverse.join('/')}" %> <%= as_json(host: container['NetworkSettings']['IPAddress']) %>
-        ensure <%= "/skydns/#{(container['Name'][1..-1] + ".docker").split('.').reverse.join('/')}" %> <%= as_json(host: container['NetworkSettings']['IPAddress']) %>
-      <% end %>
+    set "/skydns/docker/dockerhost/etcd", host: interface_ipv4('docker0'),
+                                          port: 4001
 
-    vhosts: |
-      <% container['Config']['Env'].fetch('VHOSTS', '').split(',').each do |vh| %>
-        ensure <%= "/vhosts/#{vh.split(':')[0]}/#{container['Id']}" %> <%= as_json(host: container['NetworkSettings']['IPAddress'], port: vh.split(':').fetch(1, '80')) %>
-      <% end %>
+    dir '/vhosts'
+    dir '/http_auth/vhosts'
+  end
+
+  change do |c|
+    # SkyDNS
+    if c['Config']['Env'].has_key? 'SERVICES'
+      c['Config']['Env']['SERVICES'].split(',').each do |s|
+        (name,port) = s.split(':')
+
+        set skydns_key(name), host: c['NetworkSettings']['IPAddress'],
+                              port: port
+      end
+    elsif c['Config']['Env'].has_key? 'SERVICE_NAME'
+      set skydns_key(c['Config']['Env']['SERVICE_NAME']), host: c['NetworkSettings']['IPAddress']
+    else
+      set skydns_key(c['Config']['Hostname'], 'docker'), host: c['NetworkSettings']['IPAddress']
+      set skydns_key(c['Name'][1..-1], 'docker'), host: c['NetworkSettings']['IPAddress']
+    end
+
+    # VHosts
+    c['Config']['Env'].fetch('VHOSTS', '').split(',').each do |vh|
+      host = vh.split(':')[0]
+      port = vh.split(':').fetch(1, 80)
+
+      set "/vhosts/#{host}/#{c['Id']}", host: c['NetworkSettings']['IPAddress'],
+                                        port: port
+    end
+
+    c['Config']['Env'].fetch('VHOSTS_AUTH', '').split(',').each do |vh|
+      host = vh.split(':')[0]
+
+      set "/http_auth/vhosts/#{host}", userlist: vh.split(':')[1],
+                                       groups: vh.split(':')[2..-1]
+    end
+  end
+end
 ```
 
+
+### consul
+
+```ruby
+consul do
+  host interface_ipv4('docker0')
+  port 8500
+  protocol :http
+  default_tags :docker_boss
+
+  setup do
+    absent_services :docker_boss
+    absent '/vhosts', recursive: true
+    absent '/http_auth/vhosts', recursive: true
+
+    dir '/vhosts'
+    dir '/http_auth/vhosts'
+  end
+
+  change do |c|
+    # Services
+    if c['Config']['Env'].has_key? 'SERVICES'
+      c['Config']['Env']['SERVICES'].split(',').each do |s|
+        service c['Id'], name: name,
+                         address: c['NetworkSettings']['IPAddress'],
+                         port: port
+      end
+    elsif c['Config']['Env'].has_key? 'SERVICE_NAME'
+      service c['Id'], name: c['Config']['Env']['SERVICE_NAME'],
+                       address: c['NetworkSettings']['IPAddress']
+    else
+      service c['Id'], name: c['Config']['Hostname'],
+                       address: c['NetworkSettings']['IPAddress']
+
+      service c['Id'], name: c['Name'][1..-1],
+                       address: c['NetworkSettings']['IPAddress']
+    end
+
+    # VHosts
+    c['Config']['Env'].fetch('VHOSTS', '').split(',').each do |vh|
+      host = vh.split(':')[0]
+      port = vh.split(':').fetch(1, 80)
+
+      set "/vhosts/#{host}/#{c['Id']}", host: c['NetworkSettings']['IPAddress'],
+                                        port: port
+    end
+
+    c['Config']['Env'].fetch('VHOSTS_AUTH', '').split(',').each do |vh|
+      host = vh.split(':')[0]
+
+      set "/http_auth/vhosts/#{host}", userlist: vh.split(':')[1],
+                                       groups: vh.split(':')[2..-1]
+    end
+  end
+end
+```
 
 ### dns
 
@@ -320,30 +402,29 @@ The `spec` setting is an ERB template which should render out all hostnames for 
 
 Example configuration:
 
-```yaml
-dns:
-  ttl: 5
-  listen:
-    - host: <%= interface_ipv4('docker0') %>
-      port: 5300
-    - host: 127.0.0.1
-      port: 5300
+```ruby
+dns do
+  ttl 5
+  listen interface_ipv4('docker0'), 5300
 
-  upstream:
-    - 8.8.8.8
-    - 8.8.4.4
+  upstream "8.8.8.8"
+  upstream "8.8.4.4"
 
-  zones:
-    - .local
-    - .docker
+  zone ".local"
+  zone ".docker"
 
-  setup: |
-    etcd.dockerhost.docker <%= interface_ipv4('docker0') %>
+  setup do
+    set :A, "etcd.dockerhost.docker", interface_ipv4('docker0')
+    set :AAAA, "etcd.dockerhost.docker", interface_ipv6('docker0')
+  end
 
-  spec: |
-    <%= container['Config']['Env'].fetch('SERVICE_NAME', container['Name'][1..-1]) %>.docker
-    <%= container['Config']['Hostname'] %>.docker
+  change do |c|
+    name "#{c['Config']['Env'].fetch('SERVICE_NAME', c['Name'][1..-1])}.docker"
+    name "#{c['Config']['Hostname']}.docker"
+  end
+end
 ```
+
 
 ### Writing your own
 
