@@ -1,43 +1,3 @@
-# GET /v1/agent/services
-#
-# {
-#   "redis": {
-#     "ID": "redis",
-#     "Service": "redis",
-#     "Tags": null,
-#     "Address": "",
-#     "Port": 8000
-#   }
-# }
-#
-# PUT /v1/agent/service/register
-#
-# {
-#   "ID": "redis1",
-#   "Name": "redis",
-#   "Tags": [
-#     "master",
-#     "v1"
-#   ],
-#   "Address": "127.0.0.1",
-#   "Port": 8000,
-#   "Check": {
-#     "Script": "/usr/local/bin/check_redis.py",
-#     "HTTP": "http://localhost:5000/health",
-#     "Interval": "10s",
-#     "TTL": "15s"
-#   }
-# }
-#
-# PUT/GET? /v1/agent/service/deregister/<serviceId>
-#
-# GET/PUT/DELETE /v1/kv/<key>
-# GET - ?raw - otherwise, base64
-# DELETE - ?recurse
-#
-# use tags to identify services registered via docker_boss
-# allow removing only services matching some tag
-
 require 'docker_boss'
 require 'docker_boss/module'
 require 'docker_boss/helpers'
@@ -59,57 +19,48 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
 
     def connection
       @http ||=
-        begin
-          http = Net::HTTP.new(@host, @port)
-          http.use_ssl = @protocol == :https
-          http.verify_mode = OpenSSL::SSL::VERIFY_NONE if @no_verify
-          http
-        end
+        DockerBoss::Helpers::MiniHTTP.new(
+          @host,
+          port:      @port,
+          protocol:  @protocol,
+          no_verify: @no_verify
+        )
     end
 
     def services
       return enum_for(:services) unless block_given?
 
-      request = Net::HTTP::Get.new("/v1/agent/services")
-      response = connection.request(request)
-      fail Error unless response.kind_of? Net::HTTPSuccess
-      JSON.parse(response.body).each do |_,v|
-        yield v
-      end
+      response = connection.request(Net::HTTP::Get, 'v1/agent/services')
+      JSON.parse(response.body).each { |_,v| yield v }
     end
 
     def service_create(s)
-      request = Net::HTTP::Put.new("/v1/agent/service/register")
-      request.body = s.to_json
-      response = connection.request(request)
-      fail Error unless response.kind_of? Net::HTTPSuccess
+      connection.request(
+        Net::HTTP::Put, '/v1/agent/service/register',
+        headers: { 'Content-Type': 'application/json' },
+        body: s.to_json
+      )
     end
 
     def service_delete(id)
-      request = Net::HTTP::Put.new("/v1/agent/service/deregister/#{id}")
-      response = connection.request(request)
-      fail Error unless response.kind_of? Net::HTTPSuccess
+      connection.request(Net::HTTP::Put, "/v1/agent/service/deregister/#{id}")
     end
 
     def delete(k, recursive = false)
-      path = "/v1/kv#{k}"
-      path += "?recurse" if recursive
-      request = Net::HTTP::Put.new(path)
-      response = connection.request(request)
-      fail Error unless response.kind_of? Net::HTTPSuccess
+      response =
+        if recursive
+          connection.request(Net::HTTP::Put, "/v1/kv#{k}", params: { recurse: nil })
+        else
+          connection.request(Net::HTTP::Put, "/v1/kv#{k}")
+      end
     end
 
     def set(k, v)
-      request = Net::HTTP::Put.new("/v1/kv#{k}")
-      request.body = v
-      response = connection.request(request)
-      fail Error unless response.kind_of? Net::HTTPSuccess
+      connection.request(Net::HTTP::Put, "/v1/kv#{k}", body: v)
     end
 
     def get(k)
-      request = Net::HTTP::Get.new("/v1/kv#{k}")
-      response = connection.request(request)
-      fail Error unless response.kind_of? Net::HTTPSuccess
+      response = connection.request(Net::HTTP::Get, "/v1/kv#{k}")
       data = JSON.parse(response.body)
       Base64.decode(data['Value'])
     end
@@ -186,7 +137,7 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
       begin
         DockerBoss.logger.debug "consul: (setup) Remove key `#{k}`"
         @client.delete(k, opts)
-      rescue ::Net::HTTPNotFound
+      rescue DockerBoss::Helpers::MiniHTTP::NotFoundError
       end
     end
 

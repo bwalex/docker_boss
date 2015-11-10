@@ -74,7 +74,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
         self.prefix = block_given? ? block : p
       end
 
-      def tags(t = [], &block)
+      def tags(t = {}, &block)
         self.tags = block_given? ? block : t
       end
 
@@ -106,34 +106,50 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
 
   def connection
     @http ||=
-      begin
-        http = Net::HTTP.new(@config.host, @config.port)
-        http.use_ssl = @config.protocol == 'https'
-        http.verify_mode = OpenSSL::SSL::VERIFY_NONE if @config.no_verify
-        http
-      end
+      DockerBoss::Helpers::MiniHTTP.new(
+        @config.host,
+        port:      @config.port,
+        protocol:  @config.protocol.to_sym,
+        no_verify: @config.no_verify
+      )
   end
 
   def do_query(q)
-    request = Net::HTTP::Get.new("/query?db=#{CGI.escape(@config.database)}&q=#{CGI.escape(q)}")
-    request.basic_auth @config.user, @config.pass
-    connection.request(request)
+    connection.request(
+      Net::HTTP::Get, '/query',
+      query_params: {
+        db: @config.database,
+        q:  q
+      },
+      basic_auth: {
+        user: @config.user,
+        pass: @config.pass
+      }
+    )
   end
 
   def test_connection!
     response = do_query('list series')
-    fail Error, response.body unless response.kind_of? Net::HTTPSuccess
     DockerBoss.logger.debug "influxdb: Connection tested successfully"
   end
 
   def do_post!(data)
     # Telegraf does: POST /write?consistency=&db=telegraf&precision=s&q=CREATE+DATABASE+telegraf&rp= HTTP/1.1
-    request = Net::HTTP::Post.new("/write?db=#{CGI.escape(@config.database)}&precision=s")
-    request.basic_auth @config.user, @config.pass
-    request.add_field('Content-Type', 'text/plain')
-    request.body = line_protocol(data)
-    response = connection.request(request)
-    fail Error, response.body unless response.kind_of? Net::HTTPSuccess
+    response = connection.request(
+      Net::HTTP::Post, '/write',
+      query_params: {
+        db: @config.database,
+        precision: 's'
+      },
+      basic_auth: {
+        user: @config.user,
+        pass: @config.pass
+      },
+      headers: {
+        'Content-Type': 'text/plain'
+      },
+      body: line_protocol(data)
+    )
   end
 
   def line_escape(v)

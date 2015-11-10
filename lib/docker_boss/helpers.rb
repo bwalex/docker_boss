@@ -39,6 +39,80 @@ module DockerBoss::Helpers
     changes
   end
 
+  class MiniHTTP
+    class Error < StandardError; end
+    class NotFoundError < StandardError; end
+
+    REDIRECT_LIMIT = 3
+    REDIRECT_CODES = %w{301 302 303 307}
+
+    def initialize(host, opts = {})
+      @host = host
+      @protocol = opts.fetch(:protocol, :http)
+      @port = opts.fetch(:port, (@protocol == :https) ? 443 : 80)
+      @no_verify = opts.fetch(:no_verify, false)
+    end
+
+    def connection
+      @http ||=
+        begin
+          http = Net::HTTP.new(@host, @port)
+          http.use_ssl = @protocol == :https
+          http.verify_mode = OpenSSL::SSL::VERIFY_NONE if @no_verify
+          http
+        end
+    end
+
+    def build_path(path, query_params)
+      if query_params.empty?
+        path
+      else
+        param_str =
+          query_params.map do |k,v|
+            if v.nil?
+              k
+            else
+              "#{k}=#{CGI.escape(v)}"
+            end
+          end.join('&')
+        "#{path}?#{param_str}"
+      end
+    end
+
+    def do_req_with_redirect(req, retries = 1)
+      fail Error, "Redirect limit exceeded" if retries < 1
+
+      response = connection.request(req)
+      if REDIRECT_CODES.include? response.code
+        do_req_with_redirect(req, retries - 1)
+      else
+        response
+      end
+    end
+
+    def request(klass, path, opts = {})
+      query_params = opts.fetch(:params, {})
+      headers = opts.fetch(:headers, {})
+      basic_auth = opts.fetch(:basic_auth, nil)
+      body = opts.fetch(:body, nil)
+
+      req = klass.new(build_path(path, query_params))
+      req.basic_auth basic_auth[:user], basic_auth[:pass] if basic_auth
+      headers.each { |k,v| req.add_field(k, v) }
+      req.body = body if body
+
+      response = do_req_with_redirect(req, REDIRECT_LIMIT)
+      code = response.code.to_i
+      if code >= 200 and code < 300
+        response
+      elsif code == 404
+        fail NotFoundError, "Received code 404"
+      else
+        fail Error, "Status code: #{code}"
+      end
+    end
+  end
+
   module Mixin
     def as_json(hash)
       hash.to_json

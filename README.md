@@ -204,17 +204,17 @@ Each configuration entry can have an optional linked container. The container is
 
 The `linked_container` `action` setting allows performing one of the following actions on the container:
 
- - `shell:<cmd>` - Execute a command inside the container in a shell
- - `shell_bg:<cmd>` - Same as `shell`, but does not wait for the result
- - `exec:<cmd>` - Execute a command inside the container without a shell
- - `exec_bg:<cmd>` - Same as `exec`, but does not wait for the result
- - `restart` - Restarts the container
- - `start` - Starts the container
- - `stop` - Stops the container
- - `pause` - Pause the container
- - `unpause` - Unpause the container
- - `kill` - Kill the container
- - `kill:<SIG>` - Send a signal, e.g. `SIGHUP`, to the container's root process
+ - `container_shell <cmd>` - Execute a command inside the container in a shell
+ - `container_shell <cmd>, bg: true` - Same as `shell`, but does not wait for the result
+ - `container_exec <cmd>` - Execute a command inside the container without a shell
+ - `container_exec <cmd>, bg: true` - Same as `exec`, but does not wait for the result
+ - `container_restart` - Restarts the container
+ - `container_start` - Starts the container
+ - `container_stop` - Stops the container
+ - `container_pause` - Pause the container
+ - `container_unpause` - Unpause the container
+ - `container_kill` - Kill the container
+ - `container_kill signal: "SIGHUP"` - Send a signal, e.g. `SIGHUP`, to the container's root process
 
 The `action` setting outside the `linked_container` setting allows running an arbitrary shell command on the host.
 
@@ -249,7 +249,7 @@ end
 A very simple example template file could look as follows:
 
 ```
-<% containers.each do |c| %>
+<% all_containers.each do |c| %>
 <%= c['Id'] %> -> <%= c['Name'] %>
 <% end %>
 ```
@@ -263,7 +263,7 @@ The `server` setting defines the host and port of the etcd server. SSL and basic
 The `setup` setting is a template, each line of which can manipulate keys in etcd. These key manipulations are run once when the module/DockerBoss starts, and can be used to ensure a clean slate, free of any old keys from a previous run. The `setup` template can use the `interface_ipv4` and `interface_ipv6` helpers. Each line must follow one of the following formats:
 
  - `ensure <key> <value>` - sets a given key in etcd to the given value.
- - `ensure_dir <key>` - creates the given key as a directory in etcd.
+ - `dir <key>` - creates the given key as a directory in etcd.
  - `absent <key>` - removes a given key in etcd.
  - `absent_recursive <key>` removes a key and all its children.
 
@@ -449,7 +449,7 @@ class DockerBoss::Module::Foo < DockerBoss::Module::Base
     end
 
     def ConfigProxy < ::SimpleDelegator
-      include DockerBoss::Helpers::MIxin
+      include DockerBoss::Helpers::Mixin
 
       def some_knob(v)
         self.some_knob = v
