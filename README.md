@@ -14,7 +14,7 @@ DockerBoss has been built from the start to be completely pluggable. By default,
 
  - influx: The influx module can collect statistics from per-container cgroups on a regular interval, including CPU usage, memory usage, etc, and post the data to an InfluxDB instance.
 
-The pluggable design of DockerBoss, alongside the flexibility offered by the default modules, makes it possible to adapt DockerBoss to a large number of different use cases and scenarios, without being tied down to one particular convention as others do.
+The pluggable design of DockerBoss, alongside the flexibility offered by the default modules, as well as the use of a Ruby DSL (allowing arbitrary ruby code), makes it possible to adapt DockerBoss to a large number of different use cases and scenarios, without being tied down to one particular convention as others do.
 
 
 ## Installation
@@ -432,19 +432,23 @@ end
 
 ### dns
 
-The DNS module starts a built-in DNS server based on `rubydns`. The DNS server can be configured to support a number of upstream DNS servers, to which queries fall through if no known record is available and it doesn't match any of the internal DNS zones. As Docker can currently only handle IPv4, no `AAAA` records are ever served for containers.
+The DNS module starts a built-in DNS server based on `rubydns`. The DNS server can be configured to support a number of upstream DNS servers, to which queries fall through if no known record is available and it doesn't match any of the internal DNS zones.
 
 The `ttl` setting determines the `ttl` for each response, both positive and NXDOMAIN.
 
-The `listen` setting is an array of addresses/ports on which the DNS server should listen. As with the `server.host` key for the etcd module, the `host` key is a template with access to the `interface_ipv4` and `interface_ipv6` helpers.
+The `listen` method can be called several times to listen on any number of interfaces/ports. It takes the following form: `listen <ip>, <port>`.
 
-The `upstream` setting is an array of upstream DNS servers to which requests should be forwarded to if no record is available locally and the name is not within one of the local zones.
+The `upstream` method can be called several times to define a number of upstream DNS servers to which requests should be forwarded to if no record is available locally and the name is not within one of the local zones.
 
-The `zones` setting is an array of zones for which the DNS server is authoritative. The DNS server will not forward requests in these zones to upstream DNS servers, not even if no local record is found.
+The `zone` method can be called several times to define the zones for which the DNS server is authoritative. The DNS server will not forward requests in these zones to upstream DNS servers, not even if no local record is found.
 
-The `setup` setting is a template, each line of which adds a new DNS record at setup time, independently of any containers. These records are added when the module/DockerBoss starts. Each line must follow the format of `some_host_name some_ip_address`. The `setup` template can use the `interface_ipv4` and `interface_ipv6` helpers.
+The `setup` section can set up some initial records that don't depend on any containers, such as services running on the host itself. Only a single method currently exists:
 
-The `spec` setting is an ERB template which should render out all hostnames for a given container, each on a separate line. A container can have any number of host records, even none at all (by simply not rendering out any hostname).
+ - `set <record_type>, <name>, <record>` will create a new record of the given type and name to provide the given record. For example: `set :AAAA, 'etcd.dockerhost.docker', interface_ipv4('docker0')` will create an `AAAA` record.
+
+The `change` block is called whenever the state of a container changes. The provided block is called with a single argument of the container that changed state. The only available method in this block is:
+
+ - `name <some_name>` - sets up new `A` and `AAAA` records with the given name for the address(es) of the container.
 
 Example configuration:
 
@@ -468,6 +472,59 @@ dns do
     name "#{c['Config']['Env'].fetch('SERVICE_NAME', c['Name'][1..-1])}.docker"
     name "#{c['Config']['Hostname']}.docker"
   end
+end
+```
+
+### influx
+
+The influx module collects available cgroup stats for each running container at a regular interval and posts them to an InfluxDB instance. Statistics include CPU usage, memory usage, and, if available, disk usage.
+
+The `host`, `port`, `protocol` and `no_verify` settings define how to connect to consul's HTTP API. `protocol` can be one of `:http` or `:https`. `no_verify` is a boolean, only applicable if using HTTPS, that determines whether the certificate will be verified before connecting or not.
+
+The `user` and `pass` settings allow defining any HTTP basic auth username and password to use when connecting.
+
+The `database` setting defines the InfluxDB database into which to store the collected data.
+
+The `interval` setting defines the interval at which to collect samples, in seconds.
+
+The `cgroup_path` setting can be used to for a non-standard path to the cgroups (i.e. a path other than `/sys/fs/cgroup`, which is the default)
+
+An additional boolean setting, `use_ints`, which defaults to false, defines whether ints should be posted to InfluxDB instead of floats. See [influxdb/influxdb#3519](https://github.com/influxdb/influxdb/issues/3519) for more information.
+
+The `prefix` method allows defining a prefix to use for the statistics. It can take one of the following two forms:
+
+ - `prefix 'containers.'` defines a static prefix
+ - `prefix { |c| ... }` - when passed a block, it allows using a different prefix for each container. The block is passed a hash with two fields, `:id` and `:name`, corresponding to the container ID and name, respectively.
+
+Similarly, the `tags` method allows defining the tags used for the statistics of each container. In theory, it is possible to specify just static tags by passing in a ruby hash, but it's recommended to use the block form to use different tags for each container. In the block form, similar to how `prefix` works, the block is passed a hash with two fields, `:id` and `:name`.
+
+Example configuration:
+
+```ruby
+influxdb do
+  protocol  :http
+  host      'localhost'
+  port      8086
+  user      'root'
+  pass      'root'
+  no_verify false
+  database  'db1'
+  # use_ints true
+
+  #prefix    { |c| "container.#{c[:name]}." }
+  prefix 'containers.'
+
+  tags do |c|
+    {
+      dc:             'paris-1',
+      server:         `hostname`.strip,
+      container_name: c[:name],
+      container_id:   c[:id]
+    }
+  end
+  interval  10
+
+  cgroup_path '/sys/fs/cgroup'
 end
 ```
 
