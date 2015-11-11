@@ -67,6 +67,15 @@ If, for example, a key called `etcd` exists, then the DockerBoss `etcd` module w
 
 For more details about the configuration for each module, have a look at the detailed description of that module.
 
+In each configuration namespace, some helpers are available to help with common tasks. These are provided by the `DockerBoss::Helpers::Mixin` mixin. The currently provided mixins are:
+
+ - `interface_ipv4(iface)` to get the IPv4 address of some interface, e.g. `docker0`.
+ - `interface_ipv6(iface)` to get the IPv6 address of some interface, e.g. `docker0`. It'll prefer a routable address, but if none is found, a link-local address will be returned.
+ - `as_json(hash)` converts its argument to a JSON string.
+ - `skydns_key(*parts)` joins together all parts by dots, and then generates a skydns etcd key. For example, `skydns_key('redis1', 'test.example.org')` first joins together the domain to read `redis1.test.example.org` and, based on that, returns the skydns etcd key string `/skydns/org/example/test/redis1`.
+
+
+
 ### Container description
 
 Wherever templates are used in configuration settings or external template files, they are generally passed either a single container or an array of containers. Each container is a Ruby Hash, as follows:
@@ -200,9 +209,11 @@ The core of DockerBoss only keeps track of changes to container state. All actio
 
 The templates module allows re-rendering configuration files on e.g. docker volumes and then running actions such as restarting a container or sending a signal to the root process of the container.
 
-Each configuration entry can have an optional linked container. The container is specified via its name. If the action(s) performed by a particular configuration entry can themselves trigger further update events, it is important to provide the `linked_container` configuration to avoid an infinite amount of events because each event's actions triggers further events.
+The templates config is broken up into matches on containers. If an event on any container occurs, the matching is triggered. During matching, the templates module finds containers matching the specified regular expressions, and, for each of them, renders the template(s) and executes the action(s) in the matching block. However, there is no limitation as to which container the actions apply to - the block is passed two arguments: the container itself that matched, as well as a list of all containers.
 
-The `linked_container` `action` setting allows performing one of the following actions on the container:
+A number of files to generate from templates can be specified via the `file` keyword. It takes a hash with two arguments, `template` and `target`, pointing to the template source file and the rendered target file, respectively. The file paths themselves can be interpolated with properties of the container, such as paths to specific Docker volumes. The template itself will be rendered with ERB, with two variables in context: `container`, giving the container that was matched, and `all_containers`, which is a list of all currently running containers.
+
+The following container-based actions are available:
 
  - `container_shell <cmd>` - Execute a command inside the container in a shell
  - `container_shell <cmd>, bg: true` - Same as `shell`, but does not wait for the result
@@ -216,11 +227,15 @@ The `linked_container` `action` setting allows performing one of the following a
  - `container_kill` - Kill the container
  - `container_kill signal: "SIGHUP"` - Send a signal, e.g. `SIGHUP`, to the container's root process
 
-The `action` setting outside the `linked_container` setting allows running an arbitrary shell command on the host.
+ The first argument to all container-based actions is a container identifier. This can be one of the following:
 
-The `files` section allows specifying an array of `file` - `template` pairs. The file and template names themselves can contain ERB templates. These ERB templates can access information about the linked container via the `container` variable.
+ - a string with a container ID
+ - a string with a container name
+ - a container description (for example one of the arguments to the block)
 
-The templates themselves should also be ERB templates. They will be rendered with ERB, with a single variable in the namespace called `containers`, which is an array of all currently running containers.
+The only non container-based action available currently is `host_shell` which can run an arbitrary shell command on the host.
+
+Since the configuration file itself is pure Ruby, arbitrary Ruby can be used to, for example, as shown in the example config below, to find all containers with *php* in their name, and restart them, if the mysql config changes.
 
 Example configuration:
 
@@ -231,15 +246,16 @@ templates do
          target:   "#{c['Volumes']['/var/lib/mysql']}/foo.cfg"
 
     # All these actions are only executed if any of the files changes
-    container_restart c['Id']
-    # container_shell , bg: true
-    # container_exec  , bg: true
-    # container_start
-    # container_stop
-    # container_restart
-    # container_pause
-    # container_unpause
+    container_restart c
+    # container_shell c, 'echo hi > /tmp/test', bg: true
+    # container_exec  c, '/bin/false' , bg: false
+    # container_start ...
+    # container_stop  ...
+    # container_restart 'pgdb'
+    # container_pause c['Id']
+    # container_unpause c
     # container_kill , signal: "SIGHUP"
+    # all_containers.select { |c| /php/ =~ c['Name'] }.each { |c| container_restart c }
 
     host_shell "echo 'This happens on the host' > /tmp/foo.test"
   end
@@ -258,20 +274,20 @@ A very simple example template file could look as follows:
 
 The etcd module adds/updates/removes keys in etcd based on changes to the containers. This can be used to provide dynamic settings based on the containers to other tools interfacing with etcd, such as SkyDNS and confd.
 
-The `server` setting defines the host and port of the etcd server. SSL and basic HTTP auth are not yet supported. The `host` field is rendered as an ERB template, and has access to two helper functions, `interface_ipv4(some_intf)` and `interface_ipv6(some_intf)` which get the IPv4 or IPv6 address of a particular host interface.
+The `host` and `port` setting define how to connect to the etcd server. SSL and basic HTTP auth are not yet supported.
 
-The `setup` setting is a template, each line of which can manipulate keys in etcd. These key manipulations are run once when the module/DockerBoss starts, and can be used to ensure a clean slate, free of any old keys from a previous run. The `setup` template can use the `interface_ipv4` and `interface_ipv6` helpers. Each line must follow one of the following formats:
+The `setup` section can do some initial setup of etcd before doing anything else. These actions are run once when the module/DockerBoss starts, and can be used to ensure a clean slate, free of any old keys from a previous run. The following methods are supported:
 
- - `ensure <key> <value>` - sets a given key in etcd to the given value.
+ - `set <key>, <value>` - sets a given key in etcd to the given value. If `<value>` is a Ruby hash or array, it will be converted to JSON before storing into etcd.
  - `dir <key>` - creates the given key as a directory in etcd.
  - `absent <key>` - removes a given key in etcd.
- - `absent_recursive <key>` removes a key and all its children.
+ - `absent <key>, recursive: true` - removes a key and all its children.
 
-The `sets` setting supports any number of children, each of which is an ERB template that will be rendered for each container. The output of the template rendering must be lines of the following format:
+The `change` block is called whenever the state of a container changes. The provided block is called with a single argument of the container that changed state. The only available method in this block is:
 
- - `ensure <key> <value>` - ensure a key exists in etcd with the given value.
+ - `set <key>, <value>` - sets a given key in etcd to the given value. If `<value>` is a Ruby hash or array, it will be converted to JSON before storing into etcd.
 
-The etcd module will keep track of keys set during previous state updates, and if a key is no longer present, it will be removed from etcd.
+The etcd module will keep track of keys set during previous state updates, and if a key is no longer present, it will be removed from etcd. Similarly, existing keys will be updated, and, if no such key exists yet, a new key will be created.
 
 Example configuration:
 
@@ -330,20 +346,50 @@ end
 
 ### consul
 
+The consul module is very similar to the etcd module. It adds/updates/removes keys in consul's key-value store based on changes to the containers. In addition, it also supports adding/updating/removing services.
+
+The `host`, `port`, `protocol` and `no_verify` settings define how to connect to consul's HTTP API. `protocol` can be one of `:http` or `:https`. `no_verify` is a boolean, only applicable if using HTTPS, that determines whether the certificate will be verified before connecting or not.
+
+A setting to specify a set of tags to attach to every service created via DockerBoss is available in `default_tags`. As every automatically created service will be tagged with the given tag(s), it is easy to clean up all of them when restarting DockerBoss itself.
+
+The `setup` section can do some initial setup of consul before doing anything else. These actions are run once when the module/DockerBoss starts, and can be used to ensure a clean slate, free of any old keys from a previous run. The following methods are supported:
+
+ - `set <key>, <value>` - sets a given key in consul to the given value. If `<value>` is a Ruby hash or array, it will be converted to JSON before storing into consul.
+ - `dir <key>` - creates the given key as a directory in consul.
+ - `absent <key>` - removes a given key in consul.
+ - `absent <key>, recursive: true` - removes a key and all its children.
+ - `service <id>, <service description>` - creates a new service with the ID `<id>` and the given service description. More about service descriptions later.
+ - `absent_services <tag1>, ...` - removes any services matching any of the specified tag(s).
+
+The `change` block is called whenever the state of a container changes. The provided block is called with a single argument of the container that changed state. The available methods in this block are:
+
+ - `set <key>, <value>` - sets a given key in etcd to the given value. If `<value>` is a Ruby hash or array, it will be converted to JSON before storing into etcd.
+ - `service <id>, <service description>` - creates/updates a service with the ID `<id>` and the given service description. More about service descriptions later.
+
+The consul module will keep track of keys and services set during previous state updates, and if a key or service is no longer present, it will be removed from consul. Similarly, existing keys or services will be updated, and, if no such key or service exists yet, a new key will be created.
+
+A service description is a hash matching what is described in the [consul documentation of the /v1/agent/service/register endpoint](https://www.consul.io/docs/agent/http/agent.html#agent_service_register). For convenience, the consul module understands a somewhat ruby-fied version of that service description whereby it is possible to specify the keys as lowercase symbols, instead of capitalized strings. The only other difference is that the ID is provided separately instead of within the service description.
+
+Example configuration:
+
 ```ruby
 consul do
   host interface_ipv4('docker0')
   port 8500
   protocol :http
-  default_tags :docker_boss
+  default_tags :dockerboss
 
   setup do
-    absent_services :docker_boss
+    absent_services :dockerboss
     absent '/vhosts', recursive: true
     absent '/http_auth/vhosts', recursive: true
 
     dir '/vhosts'
     dir '/http_auth/vhosts'
+
+    service 'etcd-host', name: 'etcd',
+                         address: interface_ipv4('docker0'),
+                         port: 4001
   end
 
   change do |c|

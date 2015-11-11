@@ -100,8 +100,8 @@ class DockerBoss::Module::Templates < DockerBoss::Module::Base
 
 
     def do_file(f, container, all_containers)
-      tmpl_path = DockerBoss::Helpers.render_erb(f[:template], :container => container)
-      file_path = DockerBoss::Helpers.render_erb(f[:target], :container => container)
+      tmpl_path = DockerBoss::Helpers.render_erb(f[:template], container: container)
+      file_path = DockerBoss::Helpers.render_erb(f[:target], container: container)
 
       if not File.file? tmpl_path
         DockerBoss.logger.error "templates: Instance `#{@patterns.join(", ")}`: Cannot open file #{tmpl_path} (#{f[:template]})"
@@ -110,7 +110,7 @@ class DockerBoss::Module::Templates < DockerBoss::Module::Base
 
       old_digest = (File.file? file_path) ? Digest::SHA25.hexdigest(File.read(file_path)) : ""
 
-      file_contents = DockerBoss::Helpers.render_erb_file(tmpl_path, :container => container, :all_containers => all_containers)
+      file_contents = DockerBoss::Helpers.render_erb_file(tmpl_path, container: container, all_containers: all_containers)
       new_digest = Digest::SHA256.hexdigest file_contents
 
       f[:checksum] = new_digest
