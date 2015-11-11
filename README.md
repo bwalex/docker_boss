@@ -19,15 +19,7 @@ The pluggable design of DockerBoss, alongside the flexibility offered by the def
 
 ## Installation
 
-Add this line to your application's Gemfile:
-
-    gem 'docker_boss'
-
-And then execute:
-
-    $ bundle
-
-Or install it yourself as:
+Install using `gem`:
 
     $ gem install docker_boss
 
