@@ -7,18 +7,32 @@ require 'erb'
 require 'ostruct'
 require 'shellwords'
 
-class DockerBoss::Module::Templates < DockerBoss::Module
-  def initialize(config)
-    @config = config
-    @instances = []
+class DockerBoss::Module::Templates < DockerBoss::Module::Base
+  class Config
+    attr_accessor :instances
 
-    config.each do |name, inst_cfg|
-      @instances << Instance.new(name, inst_cfg)
+    def initialize(block)
+      @instances = []
+      ConfigProxy.new(self).instance_eval(&block)
+    end
+
+    class ConfigProxy < ::SimpleDelegator
+      def container(*args, &block)
+        self.instances << DockerBoss::Module::Templates::Instance.new(args, block)
+      end
     end
   end
 
+  def self.build(&block)
+    DockerBoss::Module::Templates.new(&block)
+  end
+
+  def initialize(&block)
+    @config = Config.new(block)
+  end
+
   def trigger(containers, trigger_id)
-    @instances.each do |instance|
+    @config.instances.each do |instance|
       begin
         instance.trigger(containers, trigger_id)
       rescue ArgumentError => e
@@ -31,23 +45,75 @@ class DockerBoss::Module::Templates < DockerBoss::Module
 
 
   class Instance
-    attr_reader :name
+    attr_reader :patterns, :files, :actions
 
-    def initialize(name, config)
-      @name = name
-      @config = config
-      DockerBoss.logger.debug "templates: Instance `#{@name}`: created"
+    def initialize(args, block)
+      @patterns = args
+      @block = block
+      DockerBoss.logger.debug "templates: Instance `#{args.join(", ")}`: created"
     end
 
-    def do_file(f, containers)
-      tmpl_path = DockerBoss::Helpers.render_erb(f['template'], :container => linked_container.json)
-      file_path = DockerBoss::Helpers.render_erb(f['file'], :container => linked_container.json)
+    class DSLProxy < ::SimpleDelegator
+      include DockerBoss::Helpers::Mixin
 
-      file_contents = DockerBoss::Helpers.render_erb_file(tmpl_path, :containers => containers)
+      def file(opts)
+        fail ArgumentError, "file needs both :template and :target options" unless opts.has_key? :template and opts.has_key? :target
+        self.files << opts
+      end
 
+      def container_shell(c, cmd, opts = {})
+        self.actions << { action: :container_shell, cmd: cmd, container: c, opts: opts }
+      end
+
+      def container_exec(c, cmd, opts = {})
+        self.actions << { action: :container_exec, cmd: cmd, container: c, opts: opts }
+      end
+
+      def container_start(c, opts = {})
+        self.actions << { action: :container_start, container: c, opts: opts }
+      end
+
+      def container_stop(c, opts = {})
+        self.actions << { action: :container_stop, container: c, opts: opts }
+      end
+
+      def container_restart(c, opts = {})
+        self.actions << { action: :container_restart, container: c, opts: opts }
+      end
+
+      def container_pause(c, opts = {})
+        self.actions << { action: :container_pause, container: c, opts: opts }
+      end
+
+      def container_unpause(c, opts = {})
+        self.actions << { action: :container_unpause, container: c, opts: opts }
+      end
+
+      def container_kill(c, opts = {})
+        self.actions << { action: :container_kill, container: c, opts: opts }
+      end
+
+      def host_shell(cmd)
+        self.actions << { action: :host_shell, cmd: cmd }
+      end
+    end
+
+
+    def do_file(f, container, all_containers)
+      tmpl_path = DockerBoss::Helpers.render_erb(f[:template], container: container)
+      file_path = DockerBoss::Helpers.render_erb(f[:target], container: container)
+
+      if not File.file? tmpl_path
+        DockerBoss.logger.error "templates: Instance `#{@patterns.join(", ")}`: Cannot open file #{tmpl_path} (#{f[:template]})"
+        return false
+      end
+
+      old_digest = (File.file? file_path) ? Digest::SHA25.hexdigest(File.read(file_path)) : ""
+
+      file_contents = DockerBoss::Helpers.render_erb_file(tmpl_path, container: container, all_containers: all_containers)
       new_digest = Digest::SHA256.hexdigest file_contents
-      old_digest = (f.has_key? 'checksum') ? f['checksum'] : ""
-      f['checksum'] = new_digest
+
+      f[:checksum] = new_digest
 
       File.write(file_path, file_contents) if new_digest != old_digest
       new_digest != old_digest
@@ -56,76 +122,68 @@ class DockerBoss::Module::Templates < DockerBoss::Module
     def do_actions
       err = false
 
-      if @config.has_key? 'action'
-        err ||= !system(@config['action'])
-      end
-
-      if @config.has_key? 'linked_container' and @config['linked_container'].has_key? 'action'
-        args = @config['linked_container']['action'].split(':', 2)
-        case args.first
-        when 'shell'
-          raise ArgumentError, "action `shell` needs at least one more argument" if args.size < 2
-          command = ["sh", "-c", args[1]]
-          linked_container.exec(command)
-        when 'shell_bg'
-          raise ArgumentError, "action `shell_bg` needs at least one more argument" if args.size < 2
-          command = ["sh", "-c", args[1]]
-          linked_container.exec(command, detach: true)
-        when 'exec'
-          raise ArgumentError, "action `exec` needs at least one more argument" if args.size < 2
-          linked_container.exec(Shellwords.split(args[1]))
-        when 'exec_bg'
-          raise ArgumentError, "action `exec_bg` needs at least one more argument" if args.size < 2
-          linked_container.exec(Shellwords.split(args[1]), detach: true)
-        when 'restart'
-          linked_container.restart
-        when 'start'
-          linked_container.start
-        when 'stop'
-          linked_container.stop
-        when 'pause'
-          linked_container.pause
-        when 'unpause'
-          linked_container.unpause
-        when 'kill'
-          if args.size == 2
-            linked_container.kill(:signal => args[1])
+      @actions.each do |action|
+        container = find_container(action[:container]) if action.has_key? :container
+        case action[:action]
+        when :container_shell
+          cmd = ["sh", "-c", action[:cmd]]
+          container.exec(cmd, detach: action[:opts].fetch(:bg, false))
+        when :container_exec
+          cmd = Shellwords.split(action[:cmd])
+          container.exec(cmd, detach: action[:opts].fetch(:bg, false))
+        when :container_start
+          container.start
+        when :container_stop
+          container.stop
+        when :container_restart
+          container.restart
+        when :container_pause
+          container.pause
+        when :container_unpause
+          container.unpause
+        when :container_kill
+          if action[:opts].has_key? :signal
+            container.kill(signal: action[:opts][:signal])
           else
-            linked_container.kill
+            container.kill
           end
+        when :host_shell
+          err ||= !system(action[:cmd])
         else
-          raise ArgumentError, "unknown action `#{args.first}`"
+          fail ArgumentError, "unknown action `#{action[:action]}`"
         end
       end
     end
 
-    def trigger(containers, trigger_id = nil)
-      if trigger_id.nil? or
-          not has_link? or
-          linked_container.id != trigger_id
-        # Only do something if the linked container is not also the triggering container
-        changed = @config['files'].inject (false) { |changed,f| do_file(f, containers) || changed }
-        DockerBoss.logger.info "templates: Instance `#{@name}`: triggered; changed=#{changed}"
+    def find_container(spec)
+      c = nil
+
+      if spec.is_a? String
+        c ||= (Docker::Container.all(:all => true).find { |k| k.json['Id'] == "#{spec}" })
+        c ||= (Docker::Container.all(:all => true).find { |k| k.json['Name'] == "/#{spec}" })
+      elsif spec.respond_to? :json
+        c ||= (Docker::Container.all(:all => true).find { |k| k.json['Id'] == "#{spec.json['Id']}" })
+        c ||= (Docker::Container.all(:all => true).find { |k| k.json['Name'] == "#{spec.json['Name']}" })
+      elsif spec.respond_to? :has_key and spec.has_key? 'Id'
+        c ||= (Docker::Container.all(:all => true).find { |k| k.json['Id'] == "#{spec['Id']}" })
+      elsif spec.respond_to? :has_key and spec.has_key? 'Name'
+        c ||= (Docker::Container.all(:all => true).find { |k| k.json['Name'] == "#{spec['Name']}" })
+      end
+
+      fail IndexError, "unknown container: #{spec}" unless c != nil
+
+      c
+    end
+
+    def trigger(containers, _trigger_id = nil)
+      (containers.select { |c| @patterns.inject(false) { |match,p| match || p.match(c['Name']) } }).each do |c|
+        @files = []
+        @actions = []
+        DSLProxy.new(self).instance_exec(c, containers, &@block)
+        changed = @files.inject(false) { |change,f| do_file(f, c, containers) || change }
+        DockerBoss.logger.info "templates: Instance `#{@patterns.join(", ")}`: triggered; changed=#{changed}"
         do_actions if changed
-      else
-        DockerBoss.logger.info "templates: Instance `#{@name}`: ignored event"
       end
-    end
-
-    def has_link?
-      @config.has_key? 'linked_container'
-    end
-
-    def linked_container
-      if has_link?
-        (Docker::Container.all(:all => true).find { |c| c.json['Name'] == "/#{@config['linked_container']['name']}" })
-      else
-        nil
-      end
-    end
-
-    def linked_container_props
-      data = linked_container.json
     end
   end
 end
