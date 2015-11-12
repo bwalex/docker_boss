@@ -5,6 +5,7 @@ require 'base64'
 require 'net/http'
 require 'uri'
 require 'cgi'
+require 'delegate'
 
 class DockerBoss::Module::Consul < DockerBoss::Module::Base
   class Client
@@ -37,7 +38,7 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
     def service_create(s)
       connection.request(
         Net::HTTP::Put, '/v1/agent/service/register',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type' => 'application/json' },
         body: s.to_json
       )
     end
@@ -49,9 +50,9 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
     def delete(k, recursive = false)
       response =
         if recursive
-          connection.request(Net::HTTP::Put, "/v1/kv#{k}", params: { recurse: nil })
+          connection.request(Net::HTTP::Delete, "/v1/kv#{k}", params: { recurse: nil })
         else
-          connection.request(Net::HTTP::Put, "/v1/kv#{k}")
+          connection.request(Net::HTTP::Delete, "/v1/kv#{k}")
       end
     end
 
@@ -136,7 +137,7 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
 
       begin
         DockerBoss.logger.debug "consul: (setup) Remove key `#{k}`"
-        @client.delete(k, opts)
+        @client.delete(k, opts[:recursive])
       rescue DockerBoss::Helpers::MiniHTTP::NotFoundError
       end
     end
