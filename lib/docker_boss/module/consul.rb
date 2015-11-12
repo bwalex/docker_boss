@@ -31,7 +31,7 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
     def services
       return enum_for(:services) unless block_given?
 
-      response = connection.request(Net::HTTP::Get, 'v1/agent/services')
+      response = connection.request(Net::HTTP::Get, '/v1/agent/services')
       JSON.parse(response.body).each { |_,v| yield v }
     end
 
@@ -72,6 +72,7 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
     attr_accessor :host, :port, :protocol, :no_verify, :default_tags
 
     def initialize(block)
+      @default_tags = []
       ConfigProxy.new(self).instance_eval(&block)
     end
 
@@ -153,8 +154,8 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
     end
 
     def service(id, desc)
-      DockerBoss.logger.debug "consul: (setup) Add service `#{k}`"
-      @client.service_create(::DockerBoss::Module::Consul.xlate_service(k, v, @config))
+      DockerBoss.logger.debug "consul: (setup) Add service `#{id}`"
+      @client.service_create(::DockerBoss::Module::Consul.xlate_service(id, desc, @config))
     end
 
     def absent_services(*tags)
@@ -264,7 +265,7 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
           else
             k.to_s.capitalize
           end
-        v = xlate_service(v) if v.is_a? Hash
+        v = rename_keys(v, specials) if v.is_a? Hash
         [k,v]
       end
     ]
