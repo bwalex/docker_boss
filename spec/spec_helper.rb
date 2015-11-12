@@ -17,6 +17,7 @@
 
 require 'webmock/rspec'
 require 'fakefs/spec_helpers'
+require 'docker_boss'
 
 RSpec.configure do |config|
   # rspec-expectations config goes here. You can use an alternate
@@ -92,4 +93,6 @@ RSpec.configure do |config|
 =end
 
   WebMock.disable_net_connect!
+
+  DockerBoss.logger.level = Logger::ERROR
 end
