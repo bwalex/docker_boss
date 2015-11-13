@@ -76,7 +76,7 @@ class DockerBoss::Module::Etcd < DockerBoss::Module::Base
 
     def set(k, v)
       DockerBoss.logger.debug "etcd: (setup) Set key `#{k}` => `#{v}`"
-      @client.set(k, value: v.to_json)
+      @client.set(k, value: (v.is_a? String) ? v : v.to_json)
     end
   end
 
@@ -98,6 +98,7 @@ class DockerBoss::Module::Etcd < DockerBoss::Module::Base
       include DockerBoss::Helpers::Mixin
 
       def set(k, v)
+        DockerBoss.logger.warn "etcd: Key `#{k}` set multiple times!" if self.values.has_key? k
         self.values[k] = v
       end
     end
@@ -107,16 +108,21 @@ class DockerBoss::Module::Etcd < DockerBoss::Module::Base
     DockerBoss::Module::Etcd.new(&block)
   end
 
+  attr_writer :client
+
+  def client
+    @client ||= ::Etcd.client(host: @config.host, port: @config.port)
+  end
+
   def initialize(&block)
     @config = Config.new(block)
     DockerBoss.logger.debug "etcd: Set up to connect to #{@config.host}, port #{@config.port}"
-    @client = ::Etcd.client(host: @config.host, port: @config.port)
     @previous_keys = {}
     setup
   end
 
   def setup
-    SetupProcess.new(@client).instance_eval(&@config.setup_block)
+    SetupProcess.new(client).instance_eval(&@config.setup_block)
     @change_process = ChangeProcess.new(@config.change_block)
   end
 
@@ -127,17 +133,17 @@ class DockerBoss::Module::Etcd < DockerBoss::Module::Base
 
     changes[:removed].each do |k,_|
       DockerBoss.logger.debug "etcd: Remove key `#{k}`"
-      @client.delete(k)
+      client.delete(k)
     end
 
     changes[:added].each do |k,v|
       DockerBoss.logger.debug "etcd: Add key `#{k}` => `#{v}`"
-      @client.set(k, value: v.to_json)
+      client.set(k, value: (v.is_a? String) ? v : v.to_json)
     end
 
     changes[:changed].each do |k,v|
       DockerBoss.logger.debug "etcd: Update key `#{k}` => `#{v}`"
-      @client.set(k, value: v.to_json)
+      client.set(k, value: (v.is_a? String) ? v : v.to_json)
     end
   end
 
