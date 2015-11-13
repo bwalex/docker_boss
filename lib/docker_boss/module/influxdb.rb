@@ -146,7 +146,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
         pass: @config.pass
       },
       headers: {
-        'Content-Type': 'text/plain'
+        'Content-Type' => 'text/plain'
       },
       body: line_protocol(data)
     )
