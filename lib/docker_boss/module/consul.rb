@@ -150,7 +150,7 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
 
     def set(k, v)
       DockerBoss.logger.debug "consul: (setup) Set key `#{k}` => `#{v}`"
-      @client.set(k, v.to_json)
+      @client.set(k, (v.is_a? String) ? v : v.to_json)
     end
 
     def service(id, desc)
@@ -190,10 +190,12 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
       include DockerBoss::Helpers::Mixin
 
       def set(k, v)
+        DockerBoss.logger.warn "consul: Key `#{k}` set multiple times!" if self.values.has_key? k
         self.values[k] = v
       end
 
       def service(id, desc)
+        DockerBoss.logger.warn "consul: Service `#{id}` registered multiple times!" if self.services.has_key? id
         self.services[id] = desc
       end
     end
@@ -231,12 +233,12 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
 
     changes[:added].each do |k,v|
       DockerBoss.logger.debug "consul: Add key `#{k}` => `#{v}`"
-      @client.set(k, v.to_json)
+      @client.set(k, (v.is_a? String) ? v : v.to_json)
     end
 
     changes[:changed].each do |k,v|
       DockerBoss.logger.debug "consul: Update key `#{k}` => `#{v}`"
-      @client.set(k, v.to_json)
+      @client.set(k, (v.is_a? String) ? v : v.to_json)
     end
 
     service_changes[:removed].each do |k,_|
