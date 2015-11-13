@@ -18,7 +18,7 @@ RSpec.describe DockerBoss::Module::Consul do
     describe "kv" do
       it "can set a key with a plain value" do
         req = stub_request(:put, "http://127.0.0.1:8200/v1/kv/test/1/key").
-          with(:body => "\"value\"").
+          with(:body => "value").
           to_return(:status => 200, :body => "", :headers => {})
 
         DockerBoss::Module::Consul.build do
@@ -299,6 +299,9 @@ RSpec.describe DockerBoss::Module::Consul do
           }
         }
 
+      @container2_mod = Marshal.load(Marshal.dump(@container2))
+      @container2_mod['Config']['Env']['FOO'] = "modified.test"
+
       @container3 =
         {
           "Config" => {
@@ -468,6 +471,33 @@ RSpec.describe DockerBoss::Module::Consul do
           ).to have_been_made
         end
       end
+
+      context 'with conflicts' do
+        it 'only registers conflicting services once' do
+          @inst = DockerBoss::Module::Consul.build do
+            host '127.0.0.1'
+            port 8200
+            protocol :http
+
+            change do |c|
+              service 'conflicting_service', name: c['Name'][1..-1],
+                               address: c['NetworkSettings']['IPAddress'],
+                               tags: [:tag3]
+            end
+          end
+
+          stub_request(:put, "http://127.0.0.1:8200/v1/agent/service/register").
+            to_return(:status => 200, :body => "", :headers => {})
+
+          expect(DockerBoss.logger).to receive(:warn).with(%r(conflicting_service)).once
+
+          @inst.trigger([@container1, @container2], nil)
+
+          expect(
+            a_request(:put, "http://127.0.0.1:8200/v1/agent/service/register")
+          ).to have_been_made.once
+        end
+      end
     end
 
     context 'of key-value pairs' do
@@ -478,18 +508,158 @@ RSpec.describe DockerBoss::Module::Consul do
           protocol :http
 
           change do |c|
-            set "/foo/#{c['Id']}", c['Env']['FOO']
+            set "/foo/#{c['Id']}", foo: c['Config']['Env']['FOO']
             set "/bar/#{c['Id']}", 'test'
           end
         end
       end
 
       context 'with a clean slate' do
+        it 'sets new key-value pairs' do
+          stub_request(:put, "http://127.0.0.1:8200/v1/kv/foo/id1").
+            to_return(:status => 200, :body => "", :headers => {})
+          stub_request(:put, "http://127.0.0.1:8200/v1/kv/bar/id1").
+            to_return(:status => 200, :body => "", :headers => {})
+
+          @inst.trigger([@container1], nil)
+
+          expect(
+            a_request(:put, "http://127.0.0.1:8200/v1/kv/foo/id1").
+              with(:body => {
+              'foo' => 'mariadb.test',
+            }.to_json)
+          ).to have_been_made
+
+          expect(
+            a_request(:put, "http://127.0.0.1:8200/v1/kv/bar/id1").
+              with(:body => 'test')
+          ).to have_been_made
+        end
       end
 
       context 'with existing keys' do
         before(:each) do
+          stub_request :any, /.*/
+
           @inst.trigger([@container1, @container2], nil)
+
+          WebMock.reset!
+        end
+
+        it 'removes keys when the corresponding container is removed' do
+          stub_request(:delete, "http://127.0.0.1:8200/v1/kv/foo/id1").
+            to_return(:status => 200, :body => "", :headers => {})
+          stub_request(:delete, "http://127.0.0.1:8200/v1/kv/bar/id1").
+            to_return(:status => 200, :body => "", :headers => {})
+
+          @inst.trigger([@container2], nil)
+
+          expect(
+            a_request(:delete, "http://127.0.0.1:8200/v1/kv/foo/id1")
+          ).to have_been_made
+          expect(
+            a_request(:delete, "http://127.0.0.1:8200/v1/kv/bar/id1")
+          ).to have_been_made
+        end
+
+        it 'updates an existing key if needed' do
+          stub_request(:put, "http://127.0.0.1:8200/v1/kv/foo/id2").
+            to_return(:status => 200, :body => "", :headers => {})
+
+          @inst.trigger([@container1, @container2_mod], nil)
+
+          expect(
+            a_request(:put, "http://127.0.0.1:8200/v1/kv/foo/id2").
+              with(:body => {
+              'foo' => 'modified.test'
+            }.to_json)
+          ).to have_been_made
+        end
+
+        it 'adds new keys for new containers' do
+          stub_request(:put, "http://127.0.0.1:8200/v1/kv/foo/id3").
+            to_return(:status => 200, :body => "", :headers => {})
+          stub_request(:put, "http://127.0.0.1:8200/v1/kv/bar/id3").
+            to_return(:status => 200, :body => "", :headers => {})
+
+          @inst.trigger([@container1, @container3, @container2], nil)
+
+          expect(
+            a_request(:put, "http://127.0.0.1:8200/v1/kv/foo/id3").
+              with(:body => {
+              'foo' => 'redis.test',
+            }.to_json)
+          ).to have_been_made
+
+          expect(
+            a_request(:put, "http://127.0.0.1:8200/v1/kv/bar/id3").
+              with(:body => 'test')
+          ).to have_been_made
+        end
+
+        it 'does nothing when nothing changes' do
+          stub_request :any, /.*/
+
+          @inst.trigger([@container2, @container1], nil)
+
+          assert_not_requested :any, /.*/
+        end
+
+        it 'can both add and remove keys in one go' do
+          stub_request(:delete, "http://127.0.0.1:8200/v1/kv/foo/id1").
+            to_return(:status => 200, :body => "", :headers => {})
+          stub_request(:delete, "http://127.0.0.1:8200/v1/kv/bar/id1").
+            to_return(:status => 200, :body => "", :headers => {})
+          stub_request(:put, "http://127.0.0.1:8200/v1/kv/foo/id3").
+            to_return(:status => 200, :body => "", :headers => {})
+          stub_request(:put, "http://127.0.0.1:8200/v1/kv/bar/id3").
+            to_return(:status => 200, :body => "", :headers => {})
+
+          @inst.trigger([@container3, @container2], nil)
+
+          expect(
+            a_request(:delete, "http://127.0.0.1:8200/v1/kv/foo/id1")
+          ).to have_been_made
+          expect(
+            a_request(:delete, "http://127.0.0.1:8200/v1/kv/bar/id1")
+          ).to have_been_made
+
+          expect(
+            a_request(:put, "http://127.0.0.1:8200/v1/kv/foo/id3").
+              with(:body => {
+              'foo' => 'redis.test',
+            }.to_json)
+          ).to have_been_made
+
+          expect(
+            a_request(:put, "http://127.0.0.1:8200/v1/kv/bar/id3").
+              with(:body => 'test')
+          ).to have_been_made
+        end
+      end
+
+      context 'with conflicts' do
+        it 'only sets conflicting key once' do
+          @inst = DockerBoss::Module::Consul.build do
+            host '127.0.0.1'
+            port 8200
+            protocol :http
+
+            change do |c|
+              set '/foo/conflict', c['Id']
+            end
+          end
+
+          stub_request(:put, "http://127.0.0.1:8200/v1/kv/foo/conflict").
+            to_return(:status => 200, :body => "", :headers => {})
+
+          expect(DockerBoss.logger).to receive(:warn).with(%r(/foo/conflict)).once
+
+          @inst.trigger([@container1, @container2], nil)
+
+          expect(
+            a_request(:put, "http://127.0.0.1:8200/v1/kv/foo/conflict")
+          ).to have_been_made.once
         end
       end
     end
