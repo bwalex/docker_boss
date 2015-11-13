@@ -96,3 +96,50 @@ RSpec.configure do |config|
 
   DockerBoss.logger.level = Logger::ERROR
 end
+
+#        {
+#          "Args" => [
+#             "mysqld"
+#          ],
+#          "Config" => {
+#              "Env" => {
+#                 "MYSQL_ROOT_PASSWORD" => "assbYrwVnWxP",
+#                 "FOO"  => "bar",
+#                 "PATH" => "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+#              }
+#          },
+#          "Id" => "6b2bbdac4b6e01caccf84346aff37f31740760a95d131b519de6e6e0ca6ba2d9",
+#          "Image" => "dc7e7b74d729c8b7ffab9ac5bc4b9a1463739e085b461b29928bf2fee1ff8303",
+#          "MountLabel" => "",
+#          "Name" => "/differentdb",
+#          "NetworkSettings" => {
+#             "Bridge" => "docker0",
+#             "Gateway" => "172.17.42.1",
+#             "IPAddress" => "172.17.0.19",
+#             "IPPrefixLen" => 16,
+#             "MacAddress" => "02:42:ac:11:00:13",
+#             "PortMapping" => null,
+#             "Ports" => {
+#                "3306/tcp" => null
+#             }
+#          },
+#          "Path" => "/docker-entrypoint.sh",
+#          "ResolvConfPath" => "/var/lib/docker/containers/6b2bbdac4b6e01caccf84346aff37f31740760a95d131b519de6e6e0ca6ba2d9/resolv.conf",
+#          "State" => {
+#             "Error" => "",
+#             "ExitCode" => 0,
+#             "FinishedAt" => "0001-01-01T00:00:00Z",
+#             "OOMKilled" => false,
+#             "Paused" => false,
+#             "Pid" => 13435,
+#             "Restarting" => false,
+#             "Running" => true,
+#             "StartedAt" => "2014-12-24T15:54:45.133773245Z"
+#          },
+#          "Volumes" => {
+#             "/var/lib/mysql" => "/var/lib/docker/vfs/dir/1e3963ffc558c14d4b29bea89d6eafca9945500f5c80ea94b94b6e8664d5a1dc"
+#          },
+#          "VolumesRW" => {
+#             "/var/lib/mysql" => true
+#          }
+#        },
