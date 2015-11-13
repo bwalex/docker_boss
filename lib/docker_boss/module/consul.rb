@@ -155,7 +155,7 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
 
     def service(id, desc)
       DockerBoss.logger.debug "consul: (setup) Add service `#{id}`"
-      @client.service_create(::DockerBoss::Module::Consul.xlate_service(id, desc, @config))
+      @client.service_create(::DockerBoss::Module::Consul.xlate_service(desc.merge(id: id), @config))
     end
 
     def absent_services(*tags)
@@ -246,13 +246,13 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
 
     service_changes[:added].each do |k,v|
       DockerBoss.logger.debug "consul: Add service `#{k}`"
-      @client.service_create(::DockerBoss::Module::Consul.xlate_service(k, v, @config))
+      @client.service_create(::DockerBoss::Module::Consul.xlate_service(v.merge(id: k), @config))
     end
 
     service_changes[:changed].each do |k,v|
       DockerBoss.logger.debug "consul: Update service `#{k}`"
       @client.service_delete(k)
-      @client.service_create(::DockerBoss::Module::Consul.xlate_service(k, v))
+      @client.service_create(::DockerBoss::Module::Consul.xlate_service(v.merge(id: k), @config))
     end
   end
 
@@ -271,14 +271,12 @@ class DockerBoss::Module::Consul < DockerBoss::Module::Base
     ]
   end
 
-  def self.xlate_service(k, s, config)
+  def self.xlate_service(s, config)
     specials = {
       :id => 'ID',
       :http => 'HTTP',
       :ttl => 'TTL'
     }
-
-    s[:id] = k
 
     s = rename_keys(s, specials)
 
