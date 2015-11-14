@@ -23,6 +23,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
       @port = 8086
       @database = 'containers'
       @prefix = ->(c) { "container.#{c[:name]}." }
+      @tags = {}
       @interval = 60
       @cgroup_path = '/sys/fs/cgroup'
       @use_ints = false
@@ -205,10 +206,10 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
 
     @mutex.synchronize do
       containers = @containers.map do |c|
-        info = {
+        info = c.merge(
           id: c['Id'],
           name: c['Name'][1..-1],
-        }
+        )
 
         tags =
           if @config.tags.respond_to? :call
