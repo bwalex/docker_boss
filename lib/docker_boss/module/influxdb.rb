@@ -117,7 +117,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
   def do_query(q)
     connection.request(
       Net::HTTP::Get, '/query',
-      query_params: {
+      params: {
         db: @config.database,
         q:  q
       },
@@ -137,7 +137,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
     # Telegraf does: POST /write?consistency=&db=telegraf&precision=s&q=CREATE+DATABASE+telegraf&rp= HTTP/1.1
     response = connection.request(
       Net::HTTP::Post, '/write',
-      query_params: {
+      params: {
         db: @config.database,
         precision: 's'
       },
