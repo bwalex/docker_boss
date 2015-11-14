@@ -153,7 +153,10 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
   end
 
   def line_escape(v)
-    v.gsub(/,/, '\,').gsub(/\s/, '\ ').gsub(/\\/, '\\')
+    v.gsub(/,/, '\,').
+      gsub(/\s/, '\ ').
+      gsub(/\\/, '\\').
+      gsub(/=/, '\=')
   end
 
   def line_str_escape(v)
@@ -166,7 +169,7 @@ class DockerBoss::Module::Influxdb < DockerBoss::Module::Base
     elsif v.is_a? Float
       "#{v}"
     elsif v.is_a? String or v.is_a? Symbol
-      %{"#{line_str_escape(v)}"}
+      %{"#{line_str_escape(v.to_s)}"}
     else
       v ? "true" : "false"
     end
