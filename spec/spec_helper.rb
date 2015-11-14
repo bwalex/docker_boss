@@ -16,7 +16,7 @@
 # See http://rubydoc.info/gems/rspec-core/RSpec/Core/Configuration
 
 require 'webmock/rspec'
-require 'fakefs/spec_helpers'
+require 'celluloid/test'
 require 'docker_boss'
 
 RSpec.configure do |config|
