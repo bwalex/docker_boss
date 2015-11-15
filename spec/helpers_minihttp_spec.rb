@@ -115,5 +115,38 @@ RSpec.describe DockerBoss::Helpers::MiniHTTP do
 
       expect { inst.request(Net::HTTP::Get, '/test') }.to raise_error(DockerBoss::Helpers::MiniHTTP::RedirectExceededError)
     end
+
+    it 'preserves body on redirect' do
+      stub_request(:put, 'http://127.0.0.1/test').
+        to_return(status: 301, headers: { 'Location' => '/redirect_again' })
+      stub_request(:put, 'http://127.0.0.1/redirect_again').
+        to_return(status: 301, headers: { 'Location' => '/foobar' })
+
+      stub_request(:put, 'http://127.0.0.1/foobar')
+
+      inst.request(Net::HTTP::Put, '/test', body: 'Test body!')
+
+      expect(
+        a_request(:put, 'http://127.0.0.1/foobar').
+          with(:body => 'Test body!')
+      ).to have_been_requested
+    end
+
+    it 'preserves headers on redirect' do
+      stub_request(:put, 'http://127.0.0.1/test').
+        to_return(status: 301, headers: { 'Location' => '/redirect_again' })
+      stub_request(:put, 'http://127.0.0.1/redirect_again').
+        to_return(status: 301, headers: { 'Location' => '/foobar' })
+
+      stub_request(:put, 'http://127.0.0.1/foobar')
+
+      inst.request(Net::HTTP::Put, '/test', body: 'null', headers: { 'X-Auth-Token' => 'abc', 'Content-Type' => 'application/json' })
+
+      expect(
+        a_request(:put, 'http://127.0.0.1/foobar').
+          with(body: 'null',
+               headers: { 'X-Auth-Token' => 'abc', 'Content-Type' => 'application/json' })
+      ).to have_been_requested
+    end
   end
 end
