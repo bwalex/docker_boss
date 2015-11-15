@@ -3,6 +3,7 @@ require 'erb'
 require 'ostruct'
 require 'socket'
 require 'json'
+require 'uri'
 
 module DockerBoss::Helpers
   def self.render_erb(template_str, data)
@@ -41,16 +42,22 @@ module DockerBoss::Helpers
 
   class MiniHTTP
     class Error < StandardError; end
-    class NotFoundError < StandardError; end
+    class NotFoundError < Error; end
+    class RedirectExceededError < Error; end
+
+    attr_accessor :redirect_limit
+    attr_accessor :redirect_codes
 
     REDIRECT_LIMIT = 3
-    REDIRECT_CODES = %w{301 302 303 307}
+    REDIRECT_CODES = [301, 302, 303, 307]
 
     def initialize(host, opts = {})
       @host = host
       @protocol = opts.fetch(:protocol, :http)
       @port = opts.fetch(:port, (@protocol == :https) ? 443 : 80)
       @no_verify = opts.fetch(:no_verify, false)
+      @redirect_limit = REDIRECT_LIMIT
+      @redirect_codes = REDIRECT_CODES
     end
 
     def connection
@@ -63,8 +70,12 @@ module DockerBoss::Helpers
         end
     end
 
+    def uri_escape(s)
+      URI.escape(s, Regexp.new("[^#{URI::PATTERN::UNRESERVED}]"))
+    end
+
     def build_path(path, query_params)
-      if query_params.empty?
+      if query_params.nil? or query_params.empty?
         path
       else
         param_str =
@@ -72,19 +83,29 @@ module DockerBoss::Helpers
             if v.nil?
               k
             else
-              "#{k}=#{CGI.escape(v)}"
+              "#{uri_escape(k.to_s)}=#{uri_escape(v.to_s)}"
             end
           end.join('&')
         "#{path}?#{param_str}"
       end
     end
 
-    def do_req_with_redirect(req, retries = 1)
-      fail Error, "Redirect limit exceeded" if retries < 1
+    def do_req_with_redirect(klass, path, retries, opts = {})
+      fail RedirectExceededError, "Redirect limit exceeded" if retries < 1
+
+      headers = opts.fetch(:headers, {})
+      basic_auth = opts.fetch(:basic_auth, nil)
+      body = opts.fetch(:body, nil)
+
+      req = klass.new(path)
+      req.basic_auth basic_auth[:user], basic_auth[:pass] if basic_auth
+      headers.each { |k,v| req.add_field(k, v) }
+      req.body = body if body
 
       response = connection.request(req)
-      if REDIRECT_CODES.include? response.code
-        do_req_with_redirect(req, retries - 1)
+      if redirect_codes.map(&:to_s).include? response.code
+        new_location = response['Location']
+        do_req_with_redirect(klass, new_location, retries - 1, opts)
       else
         response
       end
@@ -92,16 +113,14 @@ module DockerBoss::Helpers
 
     def request(klass, path, opts = {})
       query_params = opts.fetch(:params, {})
-      headers = opts.fetch(:headers, {})
-      basic_auth = opts.fetch(:basic_auth, nil)
-      body = opts.fetch(:body, nil)
 
-      req = klass.new(build_path(path, query_params))
-      req.basic_auth basic_auth[:user], basic_auth[:pass] if basic_auth
-      headers.each { |k,v| req.add_field(k, v) }
-      req.body = body if body
+      response = do_req_with_redirect(
+        klass,
+        build_path(path, query_params),
+        redirect_limit,
+        opts
+      )
 
-      response = do_req_with_redirect(req, REDIRECT_LIMIT)
       code = response.code.to_i
       if code >= 200 and code < 300
         response
