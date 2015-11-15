@@ -119,7 +119,7 @@ module DockerBoss::Helpers
     end
 
     def interface_ipv4(iface)
-      ifaddr = Socket.getifaddrs.select { |i| i.name == iface and i.addr.ipv4? }.first
+      ifaddr = Socket.getifaddrs.find { |i| i.name == iface and i.addr and i.addr.ipv4? }
       fail ArgumentError, "Could not retrieve IPv4 address for interface `#{iface}`" if ifaddr.nil?
 
       ifaddr.addr.ip_address
@@ -127,14 +127,15 @@ module DockerBoss::Helpers
 
     def interface_ipv6(iface)
       # prefer routable address over link-local
-      ifaddr = Socket.getifaddrs.select { |i| i.name == iface and i.addr.ipv6? }.sort_by { |i| i.addr.ipv6_linklocal? ? 1 : 0 }.first
+      ifaddr = Socket.getifaddrs.select { |i| i.name == iface and i.addr and i.addr.ipv6? }.sort_by { |i| i.addr.ipv6_linklocal? ? 1 : 0 }.first
       fail ArgumentError, "Could not retrieve IPv6 address for interface `#{iface}`" if ifaddr.nil?
 
       ifaddr.addr.ip_address
     end
 
     def skydns_key(*parts)
-      key = (opts.has_key? :prefix) ? opts[:prefix] : '/skydns'
+      opts = parts.pop if parts.last.is_a? Hash
+      key = (opts and opts.has_key? :prefix) ? opts[:prefix] : '/skydns'
       key += '/' + parts.join('.').split('.').reverse.join('/')
     end
   end
