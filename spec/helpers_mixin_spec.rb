@@ -31,7 +31,7 @@ RSpec.describe DockerBoss::Helpers::Mixin do
         ),
         OpenStruct.new(
           name: 'docker2',
-          addr: Addrinfo.new(['AF_INET6', 0, nil, 'fe80::1c32:acff:fe79:f50d%awdl0'])
+          addr: Addrinfo.new(['AF_INET6', 0, nil, 'fe80::1c32:acff:fe79:f50d'])
         ),
         OpenStruct.new(
           name: 'docker2',
@@ -51,7 +51,7 @@ RSpec.describe DockerBoss::Helpers::Mixin do
         ),
         OpenStruct.new(
           name: 'docker6',
-          addr: Addrinfo.new(['AF_INET6', 0, nil, 'fe80::1c32:acff:fe79:f50d%awdl0'])
+          addr: Addrinfo.new(['AF_INET6', 0, nil, 'fe80::1c32:acff:fe79:f50d'])
         ),
       ]
     )
@@ -137,11 +137,11 @@ RSpec.describe DockerBoss::Helpers::Mixin do
     end
 
     it 'returns a link-local IPv6 address when there is no other' do
-      expect(inst.interface_ipv6('docker6')).to eq('fe80::1c32:acff:fe79:f50d%awdl0')
+      expect(inst.interface_ipv6('docker6')).to eq('fe80::1c32:acff:fe79:f50d')
     end
 
     it 'returns the first IPv6 address' do
-      expect(inst.interface_ipv6('docker4')).to eq('2a03:2880:11:2f04:face:b00c::2')
+      expect(inst.interface_ipv6('docker4')).to satisfy { |v| ['2a03:2880:11:2f04:face:b00c::2', '2a03:2880:11:2f04:face:b00c:0:2'].include? v }
     end
   end
 end
