@@ -16,10 +16,13 @@
 # See http://rubydoc.info/gems/rspec-core/RSpec/Core/Configuration
 
 require 'webmock/rspec'
+require 'rspec-dns'
 require 'celluloid/test'
 require 'docker_boss'
 
 RSpec.configure do |config|
+
+  config.rspec_dns_connection_timeout = 5
   # rspec-expectations config goes here. You can use an alternate
   # assertion/expectation library such as wrong or the stdlib/minitest
   # assertions if you prefer.

@@ -4,6 +4,7 @@ require 'docker_boss'
 require 'docker_boss/module'
 require 'docker_boss/helpers'
 require 'thread'
+require 'set'
 
 class DockerBoss::Module::DNS < DockerBoss::Module::Base
   attr_reader :records
@@ -75,8 +76,26 @@ class DockerBoss::Module::DNS < DockerBoss::Module::Base
     class SetupProxy < ::SimpleDelegator
       include DockerBoss::Helpers::Mixin
 
-      def set(r, k, v)
-        (self.records[r] ||= {})[k] = v
+      def set(r, k, *v)
+        (self.records[r] ||= {})[k] =
+          case r
+          when :A, :AAAA
+            v.first
+          when :TXT
+            v
+          when :SRV
+            h = v.first
+            raise ArgumentError, 'SRV records needs at least :target key' unless h.has_key? :target
+
+            {
+              priority: h.fetch(:priority, 0),
+              weight: h.fetch(:weight, 0),
+              port: h.fetch(:port, 0),
+              target: h[:target]
+            }
+          else
+            raise ArgumentError, "unknown record type: #{r}"
+          end
       end
     end
   end
@@ -98,6 +117,12 @@ class DockerBoss::Module::DNS < DockerBoss::Module::Base
           (@records[:A] ||= {})[n] = c['NetworkSettings']['IPAddress'] if c['NetworkSettings']['IPAddress'] != ''
           (@records[:AAAA] ||= {})[n] = c['NetworkSettings']['GlobalIPv6Address'] if c['NetworkSettings']['GlobalIPv6Address'] != ''
         end
+        txts.each do |t|
+          (@records[:TXT] ||= {})[t[:name]] = t[:strings]
+        end
+        srvs.each do |s|
+          (@records[:SRV] ||= {})[s[:name]] = s
+        end
       end
       @records
     end
@@ -105,8 +130,31 @@ class DockerBoss::Module::DNS < DockerBoss::Module::Base
     class ChangeProxy < ::SimpleDelegator
       include DockerBoss::Helpers::Mixin
 
+      # XXX: implement srv, txt properly
+      # XXX: also for setup
+      # XXX: implement RR for same name
       def name(k)
         self.names << k
+      end
+
+      def srv(name, rec)
+        raise ArgumentError, 'SRV records need at least :target key' unless rec.has_key? :target
+        self.srvs <<
+          {
+            name: name,
+            priority: h.fetch(:priority, 0),
+            weight: h.fetch(:weight, 0),
+            port: h.fetch(:port, 0),
+            target: h[:target]
+          }
+      end
+
+      def txt(name, *strings)
+        self.txts <<
+          {
+            name: name,
+            strings: strings
+          }
       end
     end
   end
@@ -129,6 +177,7 @@ class DockerBoss::Module::DNS < DockerBoss::Module::Base
 
   def setup
     @setup_records = SetupProcess.new(@config.setup_block).records
+    @records = setup_records
     @change_process = ChangeProcess.new(@config.change_block)
   end
 
@@ -173,15 +222,60 @@ class DockerBoss::Module::DNS < DockerBoss::Module::Base
       @resolver = RubyDNS::Resolver.new(servers)
     end
 
+    def find_records(name, resource_classes)
+      resource_classes = resource_classes.to_set
+
+      resources = []
+
+      if Set[IN::AAAA, IN::ANY].intersect? resource_classes
+          records.has_key? :AAAA and records[:AAAA].has_key? name
+        resources << IN::AAAA.new(records[:AAAA][name])
+      end
+
+      if Set[IN::A, IN::ANY].intersect? resource_classes and
+          records.has_key? :A and records[:A].has_key? name
+        resources << IN::A.new(records[:A][name])
+      end
+
+      if Set[IN::TXT, IN::ANY].intersect? resource_classes and
+          records.has_key? :TXT and records[:TXT].has_key? name
+        resources << IN::TXT.new(*records[:TXT][name])
+      end
+
+      if Set[IN::SRV, IN::ANY].intersect? resource_classes and
+          records.has_key? :SRV and records[:SRV].has_key? name
+        resources << IN::SRV.new(
+          records[:SRV][name][:priority],
+          records[:SRV][name][:weight],
+          records[:SRV][name][:port],
+          records[:SRV][name][:target]
+        )
+      end
+
+    end
+
     def process(name, resource_class, transaction)
       zone = @zones.find { |z| name =~ /#{z}$/ }
+      resources = []
 
-      if [IN::AAAA].include? resource_class and
-          records[:AAAA].has_key? name
-          transaction.respond!(records[:AAAA][name], ttl: @ttl)
-      elsif [IN::A].include? resource_class and
-          records[:A].has_key? name
-          transaction.respond!(records[:A][name], ttl: @ttl)
+      if [IN::AAAA, IN::ANY].include? resource_class and
+          records.has_key? :AAAA and records[:AAAA].has_key? name
+        resources << IN::AAAA.new(records[:AAAA][name])
+      end
+
+      if [IN::A, IN::ANY].include? resource_class and
+          records.has_key? :A and records[:A].has_key? name
+        resources << IN::A.new(records[:A][name])
+      end
+
+      if [IN::TXT, IN::ANY].include? resource_class and
+          records.has_key? :TXT and records[:TXT].has_key? name
+        resources << IN::TXT.new(*records[:TXT][name])
+      end
+
+      if not resources.empty?
+        transaction.add(resources, ttl: @ttl)
+        transaction.fail!(:NoError)
       elsif zone
         soa = Resolv::DNS::Resource::IN::SOA.new(Resolv::DNS::Name.create("#{zone}"), Resolv::DNS::Name.create("dockerboss."), 1, @ttl, @ttl, @ttl, @ttl)
         transaction.add([soa], name: "#{zone}.", ttl: @ttl, section: :authority)
