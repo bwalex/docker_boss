@@ -16,13 +16,33 @@
 # See http://rubydoc.info/gems/rspec-core/RSpec/Core/Configuration
 
 require 'webmock/rspec'
-require 'rspec-dns'
 require 'celluloid/test'
 require 'docker_boss'
 
+require 'rspec/expectations'
+
+RSpec::Matchers.define :have_dns_record do |*expected|
+  parts = expected.flatten.map { |a| Regexp.quote(a) }.join('\s+')
+  rx = /^#{parts}/i
+  match do |actual|
+    actual.map(&:to_s).any? { |r| r =~ rx }
+  end
+
+  failure_message do |actual|
+    res = actual.map(&:to_s).join("\n    ")
+    rec = expected.flatten.join("\t")
+    "expected to find record\n    #{rec}\nwithin the response records:\n    #{res}"
+  end
+
+  failure_message_when_negated do |actual|
+    res = actual.map(&:to_s).join("\n    ")
+    rec = expected.flatten.join("\t")
+    "expected to not find record\n    #{rec}\nwithin the response records:\n    #{res}"
+  end
+end
+
 RSpec.configure do |config|
 
-  config.rspec_dns_connection_timeout = 5
   # rspec-expectations config goes here. You can use an alternate
   # assertion/expectation library such as wrong or the stdlib/minitest
   # assertions if you prefer.
